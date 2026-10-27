@@ -121,6 +121,7 @@ export interface RecommendResult {
   status: string;
   label: string;
   base_amount: string;
+  base_amount_source?: "notice" | "user_input";
   lower_limit: { rate_pct: string; source: string; a_value: string | null; formula: string; rule_code: string | null; verified: boolean };
   sample: { n: number; sajeong_summary: Partial<Summary>; period: { from: string | null; to: string }; conditions: Record<string, string | null>; notice_ids: number[] };
   scenarios: Scenario[];

@@ -28,17 +28,20 @@ class LowerLimitOverride:
     a_value: Decimal | None = None  # 공고문에 명시된 A값
 
 
-def notice_context(n: ProcurementNotice) -> NoticeContext:
+def notice_context(n: ProcurementNotice, base_amount: Decimal | None = None) -> NoticeContext:
+    """base_amount: 공고에 기초금액이 없을 때 사용자가 공고문에서 확인해 입력한 값(공고 자체는 바꾸지 않는다)."""
     return NoticeContext(
         announcement_date=n.announcement_date, procurement_type=n.procurement_type,
         issuing_authority_type=n.issuing_authority_type, contract_method=n.contract_method, award_method=n.award_method,
-        presumed_price=n.presumed_price, base_amount=n.base_amount, region_code=n.region_code, industry_code=n.industry_code,
+        presumed_price=n.presumed_price, base_amount=base_amount if base_amount is not None else n.base_amount, region_code=n.region_code, industry_code=n.industry_code,
     )
 
 
-def resolve_lower_limit(session: Session, n: ProcurementNotice, override: LowerLimitOverride) -> tuple[LowerLimitSpec, dict[str, Any]]:
+def resolve_lower_limit(
+    session: Session, n: ProcurementNotice, override: LowerLimitOverride, *, base_amount: Decimal | None = None,
+) -> tuple[LowerLimitSpec, dict[str, Any]]:
     """하한 산식 결정 순서: 사용자 입력 > 공고에 맞는 등록 규칙(하나만 일치할 때) > 공고에 기재된 하한율."""
-    selection = select_rules([to_definition(r) for r in list_rules(session)], notice_context(n))
+    selection = select_rules([to_definition(r) for r in list_rules(session)], notice_context(n, base_amount))
     info: dict[str, Any] = {
         "rule_selection_warnings": list(selection.warnings),
         "matched_rules": [m.rule.rule_code for m in selection.matches],

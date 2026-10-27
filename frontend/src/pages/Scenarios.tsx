@@ -17,6 +17,7 @@ export default function Scenarios() {
   const [period, setPeriod] = useState("3y");
   const [llr, setLlr] = useState("");
   const [aValue, setAValue] = useState("");
+  const [baseAmount, setBaseAmount] = useState("");
   const [presets, setPresets] = useState({ conservative: "80", moderate: "50", aggressive: "20" });
   const [customs, setCustoms] = useState<CustomRow[]>([]);
   const [costId, setCostId] = useState("");
@@ -32,6 +33,7 @@ export default function Scenarios() {
     setInputErr(null);
     if (llr && parseRateInput(llr) === null) return setInputErr("낙찰하한율은 숫자로 입력하세요.");
     if (aValue && parseWonInput(aValue) === null) return setInputErr("A값은 원 단위 숫자로 입력하세요.");
+    if (baseAmount && !parseWonInput(baseAmount)) return setInputErr("기초금액은 원 단위 정수로 입력하세요.");
     const custom = [];
     for (const c of customs) {
       if (c.kind === "amount") {
@@ -48,6 +50,7 @@ export default function Scenarios() {
     try {
       setR(await post<RecommendResult>("/api/recommend", {
         notice_id: noticeId, period: period || null, lower_limit_rate_pct: parseRateInput(llr) ?? undefined, a_value: parseWonInput(aValue) ?? undefined,
+        base_amount: parseWonInput(baseAmount) ?? undefined,
         presets, custom, cost_id: costId ? Number(costId) : undefined, bid_vat_included: vat === "" ? undefined : vat === "true", save,
       }));
     } catch (e) {
@@ -76,6 +79,9 @@ export default function Scenarios() {
             <input className="input" value={llr} onChange={(e) => setLlr(e.target.value)} />
           </Field>
           <Field label="A값(원, 공고 명시값)"><input className="input" value={aValue} onChange={(e) => setAValue(e.target.value)} /></Field>
+          <Field label="기초금액(원, 공고문 확인값)" hint="비우면 수집된 기초금액을 씁니다. 공고 데이터는 바뀌지 않습니다.">
+            <input className="input" value={baseAmount} onChange={(e) => setBaseAmount(e.target.value)} />
+          </Field>
           <Field label="투찰금액 부가세">
             <select className="input" value={vat} onChange={(e) => setVat(e.target.value)}>
               <option value="">공고 값 따름</option><option value="true">포함</option><option value="false">별도</option>
@@ -122,7 +128,7 @@ export default function Scenarios() {
           <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
             <AssumptionBadge />
             {r.status === "insufficient_data" && <Badge tone="red">자료 부족: 보수·중립·공격 시나리오 없음</Badge>}
-            <span>{r.notice.title} · 기초금액 {won(r.base_amount)}</span>
+            <span>{r.notice.title} · 기초금액 {won(r.base_amount)}{r.base_amount_source === "user_input" ? " (직접 입력)" : ""}</span>
             <span>하한: {r.lower_limit.formula}, {pct(r.lower_limit.rate_pct)} ({r.lower_limit.source === "rule" ? `규칙 ${r.lower_limit.rule_code}${r.lower_limit.verified ? "" : " 미검증"}` : r.lower_limit.source === "notice" ? "공고 기재" : "사용자 입력"})</span>
             {r.analysis_run_id && <a className="text-blue-700 underline" href={`/api/reports/runs/${r.analysis_run_id}.xlsx`}>보고서 XLSX</a>}
           </div>

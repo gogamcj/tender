@@ -152,3 +152,35 @@ def test_stats_run_reproduce(history):  # noqa: F811
     rep = history.post(f"/api/analysis/runs/{out['analysis_run_id']}/reproduce").json()
     assert rep["data_changed"] is False and rep["result_identical"] is True
     assert history.post("/api/analysis/runs/9999/reproduce").status_code == 404
+
+
+def test_user_base_amount_when_notice_has_none(target):
+    client, _ = target
+    no_base = TARGET | {"notice_number": "T-2026-NOBASE", "base_amount": None}
+    nid = client.post("/api/notices", json=no_base).json()["id"]
+    r = client.post("/api/recommend", json={"notice_id": nid, "lower_limit_rate_pct": "87.745"})
+    assert r.status_code == 422 and r.json()["field"] == "base_amount"
+    r = client.post("/api/recommend", json={"notice_id": nid, "lower_limit_rate_pct": "87.745", "base_amount": "800000000.5"})
+    assert r.status_code == 422 and r.json()["field"] == "base_amount"
+    r = client.post("/api/recommend", json={"notice_id": nid, "period": None, "lower_limit_rate_pct": "87.745", "base_amount": "800000000", "save": True})
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["base_amount_source"] == "user_input"
+    assert any(w.startswith("USER_BASE_AMOUNT:") for w in out["warnings"])
+    # 공고 데이터는 바뀌지 않는다
+    assert client.get(f"/api/notices/{nid}").json()["base_amount"] is None
+    # 저장된 실행은 입력값까지 그대로 재현된다
+    run = client.get(f"/api/analysis/runs/{out['analysis_run_id']}").json()
+    assert run["input_snapshot"]["base_amount"] == "800000000"
+
+
+def test_user_base_amount_differs_from_notice(target):
+    client, nid = target
+    r = client.post("/api/recommend", json={"notice_id": nid, "period": None, "lower_limit_rate_pct": "87.745", "base_amount": "810000000"})
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["base_amount_source"] == "user_input"
+    assert any(w.startswith("USER_BASE_AMOUNT_DIFFERS") for w in out["warnings"])
+    same = client.post("/api/recommend", json={"notice_id": nid, "period": None, "lower_limit_rate_pct": "87.745"}).json()
+    assert same["base_amount_source"] == "notice"
+    assert not any("USER_BASE_AMOUNT" in w for w in same["warnings"])

@@ -90,6 +90,8 @@ class RecommendIn(BaseModel):
     history_filters: dict[str, Any] = Field(default_factory=dict)
     lower_limit_rate_pct: Decimal | None = None
     a_value: Decimal | None = None
+    # 공고에 기초금액이 없거나 다를 때 공고문에서 확인한 값을 직접 넣는다(공고 데이터는 바꾸지 않음).
+    base_amount: Decimal | None = None
     presets: dict[str, Decimal] | None = None
     custom: list[CustomIn] = Field(default_factory=list)
     cost_id: int | None = None
@@ -102,8 +104,11 @@ def run_recommend(body: RecommendIn, session: Session, user: User) -> tuple[dict
     n = session.get(ProcurementNotice, body.notice_id)
     if n is None:
         raise HTTPException(404, "공고가 없습니다.")
-    if n.base_amount is None:
-        raise CalcInputError("base_amount", "기초금액이 확인되지 않은 공고는 시나리오를 계산하지 않습니다.")
+    if body.base_amount is not None and (body.base_amount <= 0 or body.base_amount != body.base_amount.to_integral_value()):
+        raise CalcInputError("base_amount", "기초금액은 0보다 큰 원 단위 정수로 입력하세요.")
+    base = body.base_amount if body.base_amount is not None else n.base_amount
+    if base is None:
+        raise CalcInputError("base_amount", "기초금액이 확인되지 않은 공고입니다. 공고문에서 확인한 기초금액을 입력하면 계산할 수 있습니다.")
     bad = set(body.history_filters) - HISTORY_FILTER_KEYS
     if bad:
         raise HTTPException(400, f"쓸 수 없는 과거 자료 조건: {sorted(bad)}")
@@ -111,7 +116,7 @@ def run_recommend(body: RecommendIn, session: Session, user: User) -> tuple[dict
     for k in ("amount_min", "amount_max"):
         if extra.get(k) is not None:
             extra[k] = Decimal(str(extra[k]))
-    spec, rule_info = resolve_lower_limit(session, n, LowerLimitOverride(body.lower_limit_rate_pct, body.a_value))
+    spec, rule_info = resolve_lower_limit(session, n, LowerLimitOverride(body.lower_limit_rate_pct, body.a_value), base_amount=base)
     try:
         records, samples, f = history_for(session, n, period=body.period, extra=extra)
     except ValueError as e:
@@ -123,13 +128,19 @@ def run_recommend(body: RecommendIn, session: Session, user: User) -> tuple[dict
         sheet = body.cost.sheet()
     vat = body.bid_vat_included if body.bid_vat_included is not None else n.vat_included
     req = ScenarioRequest(
-        base_amount=n.base_amount, lower_limit=spec, sajeong_samples=samples,
+        base_amount=base, lower_limit=spec, sajeong_samples=samples,
         presets=dict(body.presets) if body.presets is not None else dict(SCENARIO_PRESETS),
         custom=[CustomScenario(**c.model_dump()) for c in body.custom], cost=sheet, bid_vat_included=vat,
     )
     result = build_scenarios(req)
     result["notice"] = {"id": n.id, "notice_number": n.notice_number, "title": n.title, "bid_deadline": n.bid_deadline.isoformat() if n.bid_deadline else None}
     result["rule_selection"] = rule_info
+    result["base_amount_source"] = "notice" if body.base_amount is None else "user_input"
+    if body.base_amount is not None:
+        if n.base_amount is None:
+            result["warnings"].append("USER_BASE_AMOUNT: 기초금액은 사용자가 입력한 값입니다(수집된 기초금액 없음). 공고문 값과 같은지 확인하세요.")
+        elif n.base_amount != body.base_amount:
+            result["warnings"].append(f"USER_BASE_AMOUNT_DIFFERS: 입력한 기초금액({body.base_amount})이 공고의 기초금액({n.base_amount})과 다릅니다. 입력값으로 계산했습니다.")
     result["sample"]["period"] = f.describe()
     result["sample"]["conditions"] = {k: getattr(n, k) for k in ("procurement_type", "issuing_authority_type", "contract_method", "award_method")} | {
         "lower_limit_rate": str(n.lower_limit_rate) if n.lower_limit_rate is not None else None}
