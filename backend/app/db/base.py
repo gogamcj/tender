@@ -86,8 +86,31 @@ def utcnow() -> datetime:
     return datetime.now(UTC)
 
 
-def TZDateTime() -> DateTime:  # noqa: N802 - 타입 팩토리
-    return DateTime(timezone=True)
+class UTCDateTime(TypeDecorator):
+    """시간대가 있는 일시. 항상 UTC 로 저장·반환한다.
+
+    SQLite 는 시간대 정보를 버리므로 읽을 때 UTC 를 다시 붙인다. 시간대 없는(naive) 값은 저장하지 않는다.
+    """
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            raise ValueError("시간대 정보가 없는 일시는 저장할 수 없습니다(UTC 또는 KST 를 명시하세요).")
+        value = value.astimezone(UTC)
+        return value.replace(tzinfo=None) if dialect.name == "sqlite" else value
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
+def TZDateTime() -> UTCDateTime:  # noqa: N802 - 타입 팩토리
+    return UTCDateTime()
 
 
 def enum_column(enum_cls: type[PyEnum], name: str) -> Enum:

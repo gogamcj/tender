@@ -68,3 +68,14 @@ def client(engine):
     app.dependency_overrides[get_session] = _override
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture(autouse=True)
+def _isolated_settings(tmp_path, monkeypatch):
+    """테스트마다 업로드 저장 위치를 임시 폴더로 분리한다."""
+    from app.core.config import get_settings
+
+    monkeypatch.setenv("BID_STORAGE_DIR", str(tmp_path / "storage"))
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()

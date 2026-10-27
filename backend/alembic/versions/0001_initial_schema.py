@@ -35,7 +35,7 @@ def upgrade() -> None:
     sa.Column('category', sa.String(length=40), nullable=False),
     sa.Column('message', sa.Text(), nullable=False),
     sa.Column('context', sa.JSON().with_variant(postgresql.JSONB(astext_type=sa.Text()), 'postgresql'), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('created_at', app.db.base.UTCDateTime(), nullable=False),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_app_events'))
     )
     with op.batch_alter_table('app_events', schema=None) as batch_op:
@@ -60,9 +60,9 @@ def upgrade() -> None:
     sa.Column('rounding_rule', sa.JSON().with_variant(postgresql.JSONB(astext_type=sa.Text()), 'postgresql'), nullable=True),
     sa.Column('applicability', sa.JSON().with_variant(postgresql.JSONB(astext_type=sa.Text()), 'postgresql'), nullable=True),
     sa.Column('verification_status', sa.Enum('verified', 'unverified', 'retired', name='verification_status', native_enum=False, create_constraint=True, length=40), nullable=False),
-    sa.Column('verified_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('verified_at', app.db.base.UTCDateTime(), nullable=True),
     sa.Column('notes', sa.Text(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('created_at', app.db.base.UTCDateTime(), nullable=False),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_bid_rules')),
     sa.UniqueConstraint('rule_code', 'source_version', name=op.f('uq_bid_rules_rule_code_source_version'))
     )
@@ -93,8 +93,8 @@ def upgrade() -> None:
     sa.Column('source_name', sa.String(length=60), nullable=False),
     sa.Column('operation', sa.String(length=100), nullable=True),
     sa.Column('query_parameters', sa.JSON().with_variant(postgresql.JSONB(astext_type=sa.Text()), 'postgresql'), nullable=False),
-    sa.Column('started_at', sa.DateTime(timezone=True), nullable=False),
-    sa.Column('finished_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('started_at', app.db.base.UTCDateTime(), nullable=False),
+    sa.Column('finished_at', app.db.base.UTCDateTime(), nullable=True),
     sa.Column('status', sa.Enum('pending', 'running', 'succeeded', 'partial', 'failed', 'quota_stopped', name='collection_status', native_enum=False, create_constraint=True, length=40), nullable=False),
     sa.Column('request_count', sa.Integer(), nullable=False),
     sa.Column('inserted_count', sa.Integer(), nullable=False),
@@ -112,7 +112,7 @@ def upgrade() -> None:
     sa.Column('password_hash', sa.String(length=255), nullable=False),
     sa.Column('role', sa.Enum('admin', 'user', name='user_role', native_enum=False, create_constraint=True, length=40), nullable=False),
     sa.Column('is_active', sa.Boolean(), nullable=False),
-    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('created_at', app.db.base.UTCDateTime(), nullable=False),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_users')),
     sa.UniqueConstraint('username', name=op.f('uq_users_username'))
     )
@@ -136,8 +136,8 @@ def upgrade() -> None:
     sa.Column('amount_max', app.db.base.ExactDecimal(precision=18, scale=0), nullable=True),
     sa.Column('credit_rating', sa.String(length=20), nullable=True),
     sa.Column('notes', sa.Text(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
-    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('created_at', app.db.base.UTCDateTime(), nullable=False),
+    sa.Column('updated_at', app.db.base.UTCDateTime(), nullable=False),
     sa.ForeignKeyConstraint(['owner_user_id'], ['users.id'], name=op.f('fk_company_profiles_owner_user_id_users'), ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_company_profiles'))
     )
@@ -155,8 +155,8 @@ def upgrade() -> None:
     sa.Column('column_mapping', sa.JSON().with_variant(postgresql.JSONB(astext_type=sa.Text()), 'postgresql'), nullable=True),
     sa.Column('status', sa.Enum('analyzing', 'mapping', 'preview', 'committed', 'cancelled', 'failed', 'rolled_back', name='import_status', native_enum=False, create_constraint=True, length=40), nullable=False),
     sa.Column('uploaded_by', sa.Integer(), nullable=True),
-    sa.Column('uploaded_at', sa.DateTime(timezone=True), nullable=False),
-    sa.Column('committed_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('uploaded_at', app.db.base.UTCDateTime(), nullable=False),
+    sa.Column('committed_at', app.db.base.UTCDateTime(), nullable=True),
     sa.Column('row_count', sa.Integer(), nullable=False),
     sa.Column('accepted_count', sa.Integer(), nullable=False),
     sa.Column('rejected_count', sa.Integer(), nullable=False),
@@ -189,8 +189,8 @@ def upgrade() -> None:
     sa.Column('industry_code', sa.String(length=20), nullable=True),
     sa.Column('industry_name', sa.String(length=200), nullable=True),
     sa.Column('announcement_date', sa.Date(), nullable=True),
-    sa.Column('bid_deadline', sa.DateTime(timezone=True), nullable=True),
-    sa.Column('opening_date', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('bid_deadline', app.db.base.UTCDateTime(), nullable=True),
+    sa.Column('opening_date', app.db.base.UTCDateTime(), nullable=True),
     sa.Column('base_amount', app.db.base.ExactDecimal(precision=18, scale=0), nullable=True),
     sa.Column('presumed_price', app.db.base.ExactDecimal(precision=18, scale=0), nullable=True),
     sa.Column('estimated_price', app.db.base.ExactDecimal(precision=18, scale=0), nullable=True),
@@ -204,8 +204,8 @@ def upgrade() -> None:
     sa.Column('phase', sa.Enum('pre_opening', 'post_opening', name='notice_phase', native_enum=False, create_constraint=True, length=40), nullable=False),
     sa.Column('source_name', sa.String(length=60), nullable=False),
     sa.Column('source_record_id', sa.String(length=100), nullable=True),
-    sa.Column('collected_at', sa.DateTime(timezone=True), nullable=False),
-    sa.Column('last_updated_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('collected_at', app.db.base.UTCDateTime(), nullable=False),
+    sa.Column('last_updated_at', app.db.base.UTCDateTime(), nullable=False),
     sa.Column('data_status', sa.Enum('collected', 'verified', 'partial', 'duplicate_suspected', 'source_mismatch', 'revision_check_needed', 'result_unconfirmed', 'excluded', name='data_status', native_enum=False, create_constraint=True, length=40), nullable=False),
     sa.ForeignKeyConstraint(['bid_type_id'], ['bid_types.id'], name=op.f('fk_procurement_notices_bid_type_id_bid_types'), ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['superseded_by_id'], ['procurement_notices.id'], name=op.f('fk_procurement_notices_superseded_by_id_procurement_notices'), ondelete='SET NULL'),
@@ -225,7 +225,7 @@ def upgrade() -> None:
     sa.Column('name', sa.String(length=100), nullable=False),
     sa.Column('filter_type', sa.String(length=30), nullable=False),
     sa.Column('criteria', sa.JSON().with_variant(postgresql.JSONB(astext_type=sa.Text()), 'postgresql'), nullable=False),
-    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('created_at', app.db.base.UTCDateTime(), nullable=False),
     sa.ForeignKeyConstraint(['owner_user_id'], ['users.id'], name=op.f('fk_saved_filters_owner_user_id_users'), ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_saved_filters')),
     sa.UniqueConstraint('owner_user_id', 'filter_type', 'name', name=op.f('uq_saved_filters_owner_user_id_filter_type_name'))
@@ -244,7 +244,7 @@ def upgrade() -> None:
     sa.Column('assumptions', sa.JSON().with_variant(postgresql.JSONB(astext_type=sa.Text()), 'postgresql'), nullable=True),
     sa.Column('result_summary', sa.JSON().with_variant(postgresql.JSONB(astext_type=sa.Text()), 'postgresql'), nullable=True),
     sa.Column('confidence_status', sa.String(length=40), nullable=False),
-    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('created_at', app.db.base.UTCDateTime(), nullable=False),
     sa.ForeignKeyConstraint(['created_by'], ['users.id'], name=op.f('fk_analysis_runs_created_by_users'), ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['notice_id'], ['procurement_notices.id'], name=op.f('fk_analysis_runs_notice_id_procurement_notices'), ondelete='RESTRICT'),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_analysis_runs'))
@@ -269,12 +269,12 @@ def upgrade() -> None:
     sa.Column('actual_sajeong_rate', app.db.base.ExactDecimal(precision=12, scale=6), nullable=True),
     sa.Column('lower_limit_amount', app.db.base.ExactDecimal(precision=20, scale=4), nullable=True),
     sa.Column('external_metrics', sa.JSON().with_variant(postgresql.JSONB(astext_type=sa.Text()), 'postgresql'), nullable=True),
-    sa.Column('opening_datetime', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('opening_datetime', app.db.base.UTCDateTime(), nullable=True),
     sa.Column('source_name', sa.String(length=60), nullable=False),
     sa.Column('source_record_id', sa.String(length=100), nullable=True),
-    sa.Column('verified_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('verified_at', app.db.base.UTCDateTime(), nullable=True),
     sa.Column('data_quality_status', sa.Enum('collected', 'verified', 'partial', 'duplicate_suspected', 'source_mismatch', 'revision_check_needed', 'result_unconfirmed', 'excluded', name='data_status', native_enum=False, create_constraint=True, length=40), nullable=False),
-    sa.Column('collected_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('collected_at', app.db.base.UTCDateTime(), nullable=False),
     sa.ForeignKeyConstraint(['notice_id'], ['procurement_notices.id'], name=op.f('fk_bid_results_notice_id_procurement_notices'), ondelete='RESTRICT'),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_bid_results')),
     sa.UniqueConstraint('notice_id', 'source_name', 'rebid_number', name=op.f('uq_bid_results_notice_id_source_name_rebid_number'))
@@ -300,8 +300,8 @@ def upgrade() -> None:
     sa.Column('target_profit', app.db.base.ExactDecimal(precision=18, scale=0), nullable=True),
     sa.Column('target_profit_rate', app.db.base.ExactDecimal(precision=12, scale=6), nullable=True),
     sa.Column('notes', sa.Text(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
-    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('created_at', app.db.base.UTCDateTime(), nullable=False),
+    sa.Column('updated_at', app.db.base.UTCDateTime(), nullable=False),
     sa.ForeignKeyConstraint(['notice_id'], ['procurement_notices.id'], name=op.f('fk_company_costs_notice_id_procurement_notices'), ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['owner_user_id'], ['users.id'], name=op.f('fk_company_costs_owner_user_id_users'), ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_company_costs'))
@@ -315,7 +315,7 @@ def upgrade() -> None:
     sa.Column('owner_user_id', sa.Integer(), nullable=False),
     sa.Column('notice_id', sa.Integer(), nullable=False),
     sa.Column('memo', sa.Text(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('created_at', app.db.base.UTCDateTime(), nullable=False),
     sa.ForeignKeyConstraint(['notice_id'], ['procurement_notices.id'], name=op.f('fk_favorites_notice_id_procurement_notices'), ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['owner_user_id'], ['users.id'], name=op.f('fk_favorites_owner_user_id_users'), ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_favorites')),
@@ -332,7 +332,7 @@ def upgrade() -> None:
     sa.Column('new_value', sa.Text(), nullable=True),
     sa.Column('change_source', sa.String(length=60), nullable=False),
     sa.Column('applied', sa.Boolean(), nullable=False),
-    sa.Column('changed_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('changed_at', app.db.base.UTCDateTime(), nullable=False),
     sa.ForeignKeyConstraint(['notice_id'], ['procurement_notices.id'], name=op.f('fk_notice_change_log_notice_id_procurement_notices'), ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_notice_change_log'))
     )
@@ -345,7 +345,7 @@ def upgrade() -> None:
     sa.Column('link_source', sa.Enum('auto', 'user', name='link_source', native_enum=False, create_constraint=True, length=40), nullable=False),
     sa.Column('confirmed', sa.Boolean(), nullable=False),
     sa.Column('reason', sa.Text(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('created_at', app.db.base.UTCDateTime(), nullable=False),
     sa.ForeignKeyConstraint(['notice_id'], ['procurement_notices.id'], name=op.f('fk_notice_rule_links_notice_id_procurement_notices'), ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['rule_id'], ['bid_rules.id'], name=op.f('fk_notice_rule_links_rule_id_bid_rules'), ondelete='RESTRICT'),
     sa.PrimaryKeyConstraint('notice_id', 'rule_id', name=op.f('pk_notice_rule_links'))
@@ -358,7 +358,7 @@ def upgrade() -> None:
     sa.Column('page_count', sa.Integer(), nullable=True),
     sa.Column('storage_path', sa.String(length=500), nullable=False),
     sa.Column('text_layer', sa.String(length=20), nullable=True),
-    sa.Column('uploaded_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('uploaded_at', app.db.base.UTCDateTime(), nullable=False),
     sa.ForeignKeyConstraint(['notice_id'], ['procurement_notices.id'], name=op.f('fk_pdf_documents_notice_id_procurement_notices'), ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_pdf_documents')),
     sa.UniqueConstraint('file_hash', name=op.f('uq_pdf_documents_file_hash'))
@@ -377,7 +377,7 @@ def upgrade() -> None:
     sa.Column('score_status', sa.Enum('confirmed', 'expected', 'unknown', name='score_status', native_enum=False, create_constraint=True, length=40), nullable=False),
     sa.Column('basis', sa.Text(), nullable=True),
     sa.Column('source_reference', sa.String(length=300), nullable=True),
-    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('updated_at', app.db.base.UTCDateTime(), nullable=False),
     sa.ForeignKeyConstraint(['notice_id'], ['procurement_notices.id'], name=op.f('fk_qualification_checks_notice_id_procurement_notices'), ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['owner_user_id'], ['users.id'], name=op.f('fk_qualification_checks_owner_user_id_users'), ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_qualification_checks'))
@@ -432,7 +432,7 @@ def upgrade() -> None:
     sa.Column('payload_hash', sa.String(length=64), nullable=False),
     sa.Column('collection_job_id', sa.Integer(), nullable=True),
     sa.Column('import_job_id', sa.Integer(), nullable=True),
-    sa.Column('collected_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('collected_at', app.db.base.UTCDateTime(), nullable=False),
     sa.ForeignKeyConstraint(['collection_job_id'], ['data_collection_jobs.id'], name=op.f('fk_notice_raw_records_collection_job_id_data_collection_jobs'), ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['import_job_id'], ['data_import_jobs.id'], name=op.f('fk_notice_raw_records_import_job_id_data_import_jobs'), ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['notice_id'], ['procurement_notices.id'], name=op.f('fk_notice_raw_records_notice_id_procurement_notices'), ondelete='SET NULL'),
@@ -457,7 +457,7 @@ def upgrade() -> None:
     sa.Column('method', sa.String(length=30), nullable=False),
     sa.Column('review_status', sa.Enum('unreviewed', 'confirmed', 'corrected', 'rejected', name='review_status', native_enum=False, create_constraint=True, length=40), nullable=False),
     sa.Column('reviewed_value', sa.Text(), nullable=True),
-    sa.Column('reviewed_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('reviewed_at', app.db.base.UTCDateTime(), nullable=True),
     sa.ForeignKeyConstraint(['document_id'], ['pdf_documents.id'], name=op.f('fk_pdf_extractions_document_id_pdf_documents'), ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_pdf_extractions'))
     )

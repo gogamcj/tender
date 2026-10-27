@@ -43,3 +43,37 @@ README.md "빠른 시작" 참고.
 
 ### 다음 단계
 2단계: 엑셀·CSV 업로드(시트·열 분석, 열 매핑, 형식 변환, 누락·중복·오류 검사, 미리보기, 확정 저장, 결과 보고서, 원본 보존, 변경 전후 비교)
+
+## 2단계 — 엑셀·CSV 업로드 (2026-10-27)
+
+### 생성·수정한 파일
+- 생성: `backend/app/importers/{reader,parsing,fields,validate}.py`, `backend/app/services/{notices,imports}.py`, `backend/app/api/imports.py`
+- 생성: `backend/alembic/versions/0002_import_job_links.py` — 공고·결과·변경이력에 업로드 작업 연결(되돌리기용)
+- 생성: `backend/seed/sample_results.csv`, `backend/seed/README.md`, `docs/upload-guide.md`
+- 생성: `backend/tests/unit/importers/*`, `backend/tests/integration/test_imports_api.py`
+- 수정: `backend/app/db/base.py` — `UTCDateTime` 추가(SQLite 가 시간대를 버려 재업로드 시 모든 행이 '변경'으로 잡히던 문제 해결), `0001` 마이그레이션의 일시 타입을 같은 타입으로 교체
+- 수정: `backend/app/db/models/notices.py`, `backend/app/core/config.py`(`BID_STORAGE_DIR`), `backend/app/main.py`, `backend/pyproject.toml`(python-multipart, xlrd, xlwt)
+
+### 구현한 기능
+요구사항 6장의 10단계 절차를 API 로 구현했습니다(화면은 7단계).
+1. 파일 선택·검사(형식, 크기, 매크로, 압축 해제 크기, 이진 CSV) 2. 시트·열 분석 3. 열 매핑(자동 추천 + 수동) 4. 금액·비율·날짜 변환
+5. 필수 항목 확인 6. 파일 내·기존 데이터 중복 검사 7. 오류·경고 표시 8. 미리보기 9. 확정 저장(변경은 행별 승인) 10. 결과 보고서 CSV
+- 원본 파일 보관 + 행별 원본 셀 보존, 정규화 데이터 분리
+- 기존 데이터 무조건 덮어쓰기 금지: 변경 전후를 보여 주고 승인한 행만 반영, 필드별 변경 이력 기록
+- 정정 차수 저장 시 최신 차수 표시 갱신, 업로드 작업 단위 되돌리기
+- 보고서 CSV 의 수식 주입 방지
+
+### 실행 방법
+`docs/upload-guide.md` 참고. 서버 실행 후 `/docs` 에서 업로드 API 를 직접 시험할 수 있습니다.
+
+### 실행한 테스트와 결과
+- `pytest` 전체(SQLite + PostgreSQL 16): **188 passed**
+  - 이번 단계 추가: 업로드 단위 54개(인코딩 4종, 탭 구분, XLSX·XLS 읽기, 매크로 거부, 크기 제한, 날짜·금액·비율 변환, 매핑 추천, 검증 규칙), 업로드 API 통합 16개(8개 × 2 DB: 전체 흐름, 같은 파일 재업로드, 변경 승인·미승인, 되돌리기, 새 차수, CP949, 보고서, 상태 오류), 일시 저장 테스트 2개
+- `alembic upgrade head` → `alembic check` → `alembic downgrade base` SQLite·PostgreSQL 양쪽 성공
+
+### 확인하지 못한 항목
+- 실제 나라장터에서 내려받은 엑셀 파일 형식(병합 셀, 다중 헤더 등)으로는 시험하지 못했습니다. 실제 파일을 주시면 매핑 추천 사전을 보강하겠습니다.
+- 대용량(수만 행) 파일의 처리 시간
+
+### 다음 단계
+3단계: 나라장터 API 커넥터(입찰공고·낙찰정보·개방표준), 수집 작업, 호출 한도·재시도·페이지네이션, 원본 보존, 정정 이력, API 응답 구조 점검 스크립트

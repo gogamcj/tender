@@ -146,3 +146,20 @@ def test_money_rejects_float(session):
     with pytest.raises(StatementError):
         session.commit()
     session.rollback()
+
+
+def test_datetime_roundtrip_keeps_utc_and_rejects_naive(session):
+    from datetime import UTC, datetime, timedelta, timezone
+
+    kst = timezone(timedelta(hours=9))
+    n = notice(opening_date=datetime(2024, 3, 20, 11, 0, tzinfo=kst))
+    session.add(n)
+    session.commit()
+    session.expire_all()
+    got = session.scalar(select(ProcurementNotice.opening_date))
+    assert got == datetime(2024, 3, 20, 2, 0, tzinfo=UTC)
+    assert got.tzinfo is not None
+    session.add(notice(notice_number="X", opening_date=datetime(2024, 1, 1)))
+    with pytest.raises(StatementError):
+        session.commit()
+    session.rollback()

@@ -66,6 +66,8 @@ class ProcurementNotice(Base):
     collected_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
     last_updated_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow, onupdate=utcnow)
     data_status: Mapped[DataStatus] = mapped_column(enum_column(DataStatus, "data_status"), default=DataStatus.COLLECTED)
+    # 이 행을 새로 만든 업로드 작업(작업 단위 되돌리기에 사용)
+    import_job_id: Mapped[int | None] = mapped_column(ForeignKey("data_import_jobs.id", ondelete="SET NULL"), index=True)
 
     results: Mapped[list[BidResult]] = relationship(back_populates="notice")
 
@@ -100,6 +102,7 @@ class NoticeChangeLog(Base):
     new_value: Mapped[str | None] = mapped_column(Text)
     change_source: Mapped[str] = mapped_column(String(60))  # revision / import:{job_id} / collection:{job_id} / manual
     applied: Mapped[bool] = mapped_column(Boolean, default=False)  # 사용자가 확인해 반영했는지
+    import_job_id: Mapped[int | None] = mapped_column(ForeignKey("data_import_jobs.id", ondelete="SET NULL"), index=True)
     changed_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
 
 
@@ -142,6 +145,7 @@ class BidResult(Base):
         enum_column(DataStatus, "data_status"), default=DataStatus.COLLECTED
     )
     collected_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
+    import_job_id: Mapped[int | None] = mapped_column(ForeignKey("data_import_jobs.id", ondelete="SET NULL"), index=True)
 
     notice: Mapped[ProcurementNotice] = relationship(back_populates="results")
     candidates: Mapped[list[BidCandidate]] = relationship(back_populates="result", cascade="all, delete-orphan")

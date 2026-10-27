@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 
-from app.api import calc, rules
+from app.api import calc, imports, rules
 from app.core.config import get_settings
 from app.engines.calc import CalcInputError
 from app.engines.rules import RuleBlockedError
@@ -44,6 +44,7 @@ def create_app() -> FastAPI:
 
     app.include_router(calc.router)
     app.include_router(rules.router)
+    app.include_router(imports.router)
     return app
 
 
