@@ -13,6 +13,7 @@ from .formulas import (
     check_amount_bounds,
     estimated_price_from_sajeong,
     lower_limit_amount,
+    lower_limit_amount_with_a_value,
     sajeong_rate,
     split_vat,
 )
@@ -35,6 +36,7 @@ __all__ = [
     "check_amount_bounds",
     "estimated_price_from_sajeong",
     "lower_limit_amount",
+    "lower_limit_amount_with_a_value",
     "sajeong_rate",
     "split_vat",
     "to_decimal",

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.db.models import ProcurementNotice
 from app.db.session import get_session
 from app.engines.stats import ALLOWED_DIMENSIONS, METRICS, Target, compute_stats, find_similar, histogram
-from app.services.analysis import Filters, load_records, save_run
+from app.services.analysis import Filters, dataset_version, load_records, save_run
 
 router = APIRouter(prefix="/api/analysis", tags=["분석"])
 
@@ -80,6 +80,7 @@ def stats(body: StatsIn, session: Session = Depends(get_session)) -> dict:
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
     result["disclaimer"] = DISCLAIMER
+    result["dataset_version"] = dataset_version(records, f.as_of)
     if body.save:
         run = save_run(session, analysis_type="stats", notice_id=None, inputs=body.model_dump(mode="json"), records=records,
                        as_of=f.as_of, result=result, assumptions=[DISCLAIMER],
@@ -155,6 +156,7 @@ def similar(body: SimilarIn, session: Session = Depends(get_session)) -> dict:
     records = load_records(session, f)
     result = find_similar(target, records, limit=body.limit, weights=body.weights)
     result["period"] = f.describe()
+    result["dataset_version"] = dataset_version(records, target.as_of)
     if body.save:
         run = save_run(session, analysis_type="similar", notice_id=body.notice_id, inputs=body.model_dump(mode="json"),
                        records=records, as_of=target.as_of, result=result, assumptions=[], confidence="observational")

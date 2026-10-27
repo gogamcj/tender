@@ -12,7 +12,16 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
-from ..calc import CalcResult, PriceStatus, RateBasis, RateUnit, RoundingMode, RoundingRule, lower_limit_amount
+from ..calc import (
+    CalcResult,
+    PriceStatus,
+    RateBasis,
+    RateUnit,
+    RoundingMode,
+    RoundingRule,
+    lower_limit_amount,
+    lower_limit_amount_with_a_value,
+)
 from ..calc.errors import CalcInputError
 from .schema import ANY, NoticeContext, RuleDefinition, VerificationStatus
 
@@ -189,8 +198,31 @@ def _simple_lower_limit(rule: RuleDefinition, inputs: dict[str, Any]) -> CalcRes
     )
 
 
+def _a_value_lower_limit(rule: RuleDefinition, inputs: dict[str, Any]) -> CalcResult:
+    """낙찰하한금액 = A값 + (예정가격 − A값) × 낙찰하한율
+
+    params: lower_limit_rate_pct(필수)
+    inputs: reference_price(예정가격), a_value(공고 명시 A값, 필수), price_status
+    """
+    params = rule.formula_definition.params
+    if "lower_limit_rate_pct" not in params:
+        raise CalcInputError("formula_definition.params.lower_limit_rate_pct", "규칙에 낙찰하한율이 없습니다.")
+    if "price_status" not in inputs:
+        raise CalcInputError("price_status", "기준가격의 확정 여부(price_status)를 지정해야 합니다.")
+    if inputs.get("a_value") is None:
+        raise CalcInputError("a_value", "A값 적용 규칙입니다. 공고문에 명시된 A값을 입력해야 합니다.")
+    return lower_limit_amount_with_a_value(
+        inputs.get("reference_price"),
+        str(params["lower_limit_rate_pct"]),
+        inputs["a_value"],
+        price_status=PriceStatus(inputs["price_status"]),
+        rounding=_rounding(rule),
+    )
+
+
 FORMULA_MODULES: dict[str, Callable[[RuleDefinition, dict[str, Any]], CalcResult]] = {
     "simple_lower_limit": _simple_lower_limit,
+    "a_value_lower_limit": _a_value_lower_limit,
 }
 
 

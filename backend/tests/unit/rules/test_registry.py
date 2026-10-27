@@ -10,7 +10,6 @@ from app.engines.rules import (
     NoticeContext,
     RuleBlockedError,
     RuleDefinition,
-    VerificationStatus,
     evaluate_rule,
     match_rule,
     select_rules,

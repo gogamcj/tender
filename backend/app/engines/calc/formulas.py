@@ -5,7 +5,7 @@
 
 내부 정의
 - 사정률(%) = (예정가격 − 기초금액) ÷ 기초금액 × 100
-- 낙찰하한금액 = 기준가격 × 낙찰하한율
+- 낙찰하한금액 = 기준가격 × 낙찰하한율 (A값 적용 시 A값 + (예정가격 − A값) × 낙찰하한율)
 - 투찰률(%) = 투찰금액 ÷ 기준금액 × 100  (기준금액이 예정가격인지 기초금액인지 명시)
 """
 
@@ -175,6 +175,48 @@ def lower_limit_amount(
         inputs={
             "reference_price": str(ref),
             "reference_basis": reference_basis.value,
+            "lower_limit_rate_pct": str(rate_pct),
+            "rounding": rounding.to_dict() if rounding else None,
+        },
+        price_status=price_status,
+        warnings=tuple(warnings),
+        extra={"unrounded": str(raw)},
+    )
+
+
+def lower_limit_amount_with_a_value(
+    reference_price: object,
+    lower_limit_rate: object,
+    a_value: object,
+    *,
+    rate_unit: RateUnit = RateUnit.PERCENT,
+    price_status: PriceStatus,
+    rounding: RoundingRule | None = None,
+) -> CalcResult:
+    """A값 적용 낙찰하한금액 = A값 + (예정가격 − A값) × 낙찰하한율.
+
+    A값(국민연금·건강보험료 등 공고에 명시된 금액)은 공고문에서 확인한 값만 받는다. 추정하지 않는다.
+    """
+    ref = require_positive(to_decimal(reference_price, "reference_price"), "reference_price")
+    a = require_non_negative(to_decimal(a_value, "a_value"), "a_value")
+    if a > ref:
+        raise CalcInputError("a_value", "A값이 예정가격보다 큽니다.")
+    rate_pct = to_percent(lower_limit_rate, rate_unit, "lower_limit_rate")
+    if not (Decimal(0) < rate_pct <= Decimal(100)):
+        raise CalcInputError("lower_limit_rate", f"낙찰하한율은 0% 초과 100% 이하여야 합니다: {rate_pct}%")
+    raw = a + (ref - a) * rate_pct / 100
+    value, warnings = apply_rounding(raw, rounding)
+    if price_status is not PriceStatus.ACTUAL:
+        warnings.append(f"ASSUMPTION_BASED: 기준가격이 확정값이 아니므로({price_status.value}) 하한금액도 {ASSUMPTION_LABEL} 결과입니다.")
+    return CalcResult(
+        name="lower_limit_amount",
+        value=value,
+        unit="KRW",
+        formula="A값 + (예정가격 − A값) × 낙찰하한율",
+        inputs={
+            "reference_price": str(ref),
+            "reference_basis": RateBasis.ESTIMATED_PRICE.value,
+            "a_value": str(a),
             "lower_limit_rate_pct": str(rate_pct),
             "rounding": rounding.to_dict() if rounding else None,
         },
