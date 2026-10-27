@@ -1,0 +1,19 @@
+# 1단계: PostgreSQL 만 제공합니다. 백엔드·프런트엔드 컨테이너는 8단계에서 추가합니다.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: bid
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?.env 에 POSTGRES_PASSWORD 를 설정하세요}
+      POSTGRES_DB: bid_analyzer
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bid -d bid_analyzer"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  pgdata:
