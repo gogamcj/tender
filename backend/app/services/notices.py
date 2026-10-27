@@ -205,7 +205,7 @@ def revert_change(session: Session, log: NoticeChangeLog) -> None:
     notice = session.get(ProcurementNotice, log.notice_id)
     if notice is None:
         return
-    old = _parse_stored(log.field_name, log.old_value)
+    old = parse_stored(log.field_name, log.old_value)
     if log.field_name in NOTICE_COLUMNS:
         setattr(notice, log.field_name, old)
     if log.field_name in RESULT_COLUMNS:
@@ -216,7 +216,7 @@ def revert_change(session: Session, log: NoticeChangeLog) -> None:
     session.flush()
 
 
-def _parse_stored(field: str, text: str | None) -> Any:
+def parse_stored(field: str, text: str | None) -> Any:
     if text is None:
         return None
     if field in _ENUM_COLUMNS:

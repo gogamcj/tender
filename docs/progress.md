@@ -113,3 +113,40 @@ README.md "빠른 시작" 참고.
 
 ### 다음 단계
 4단계: 과거 낙찰 데이터 분석(기간·기관·공종·지역·금액구간·결정방식·참가업체수별 통계, 사정률 분포, 이상치, 혼합 금지), 유사 입찰 검색과 선정 근거
+
+## 4단계 — 공고 검색·과거 데이터 통계·유사 입찰 (2026-10-27)
+
+### 생성·수정한 파일
+- 생성: `backend/app/engines/stats/{descriptive,similar,__init__}.py` — 서술 통계·층 분리·이상치·히스토그램·추세, 유사 입찰 점수
+- 생성: `backend/app/services/analysis.py` — 조회 조건(기간 프리셋·기준 시각·속성·금액·참가업체수), 최신 차수·제외 처리, 결과 출처 우선순위, 분석 실행 저장
+- 생성: `backend/app/api/{notices,analysis}.py`
+- 생성: `backend/seed/generate_sample_history.py`, `backend/seed/sample_history.csv`(가상 240건)
+- 생성: `backend/tests/unit/test_stats.py`, `backend/tests/integration/test_analysis_api.py`
+- 수정: `app/main.py`(라우터 등록), `seed/README.md`
+
+### 구현한 기능
+- 공고 검색 API: 검색어·기관·업종·지역·대분류·금액·기간·상태·개찰 결과 유무, 정렬·페이지, 상세(결과·정정 차수·변경 이력·원본 건수), 수동 등록, 데이터 상태 변경(이력 기록), 보류 중인 원본 변경 적용
+- 통계 API: 사정률·낙찰률·참가업체수 지표, 기간 프리셋(3개월·6개월·1년·3년)과 기준 시각, 기관·수요기관·업종·지역·금액구간·참가업체수 구간별 묶음, 월·분기 추세, IQR 이상치 표시·선택 제외, 표본 경고(10건 미만·30건 미만), 결측률, 출처별 건수
+- 조건이 다른 자료는 섞지 않음: 층별 결과만 제공, 낙찰률은 기준(예정가격·기초금액) 없는 자료 제외 후 경고
+- 사정률 분포 API: 층별 히스토그램(구간 폭 지정)
+- 유사 입찰 API: 공고 ID 또는 조건으로 검색, 필수 조건 불일치 제외·미상 감점, 항목별 점수와 선정 이유, 투찰 마감 시각 이후 개찰 건 제외(미래 정보 누출 방지)
+- 분석 실행 저장(데이터 버전·조건·결과 기록)
+
+### 실행 방법
+```
+cd backend && uvicorn app.main:app --reload
+# 가상 표본으로 확인: seed/sample_history.csv 를 /api/imports 로 업로드·미리보기·승인 후
+curl -X POST localhost:8000/api/analysis/stats -H 'Content-Type: application/json' \
+  -d '{"filters":{"period":"3y"},"metric":"sajeong_rate","group_by":["agency_name"]}'
+```
+
+### 실행한 테스트와 결과
+- `pytest` 전체(SQLite + PostgreSQL 16): **270 passed**
+  - 이번 단계 추가: 통계·유사 입찰 단위 17개, 분석·공고 API 통합 18개(9개 × 2 DB: 층 분리, 단일 층 합산과 저장, 기간 프리셋, 필터, 분포, 유사 입찰과 누출 방지, 공고 검색·상세, 수동 등록·상태 변경, 제외 공고의 통계 제외)
+
+### 확인하지 못한 항목
+- 실제 낙찰 데이터에서의 분포와 유사 입찰 품질(가상 표본으로만 확인)
+- 대용량 데이터에서의 통계 응답 시간
+
+### 다음 단계
+5단계: 투찰 시나리오(보수·중립·공격·사용자 정의), 원가·수익성, 적격심사 점검표, 분석 재현
