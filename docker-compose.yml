@@ -1,13 +1,16 @@
-# 1단계: PostgreSQL 만 제공합니다. 백엔드·프런트엔드 컨테이너는 8단계에서 추가합니다.
+# 전체 실행: cp .env.example .env (POSTGRES_PASSWORD 등 채우기) → docker compose up -d --build
+# 웹 화면: http://localhost:8080   첫 관리자: docker compose exec backend python -m app.cli create-user admin --role admin
 services:
   db:
     image: postgres:16
+    restart: unless-stopped
     environment:
       POSTGRES_USER: bid
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?.env 에 POSTGRES_PASSWORD 를 설정하세요}
       POSTGRES_DB: bid_analyzer
     ports:
-      - "127.0.0.1:5432:5432"
+      # 개발용으로 이 컴퓨터에서만 접속 허용. 외부에 열지 마세요.
+      - "127.0.0.1:${BID_DB_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -15,5 +18,31 @@ services:
       interval: 5s
       retries: 10
 
+  backend:
+    build: ./backend
+    image: bid-analyzer-backend:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # .env 의 BID_DATABASE_URL(로컬 개발용)보다 우선한다
+      BID_DATABASE_URL: postgresql+psycopg://bid:${POSTGRES_PASSWORD}@db:5432/bid_analyzer
+      BID_STORAGE_DIR: /data/storage
+    volumes:
+      - storage:/data/storage
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    image: bid-analyzer-frontend:latest
+    restart: unless-stopped
+    ports:
+      - "${BID_WEB_BIND:-127.0.0.1}:${BID_WEB_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
 volumes:
   pgdata:
+  storage:

@@ -60,3 +60,10 @@ python -m app.cli probe --notice R25BK00000000 --out ./probe_samples  # 특정 �
 | 시간 초과·네트워크·HTTP 5xx | 일시 장애 | 최대 3회 재시도 |
 
 API 장애가 나도 이미 저장된 데이터, 업로드, 계산·분석 기능은 그대로 동작합니다. 수집은 페이지 단위로 저장되어 중간에 실패해도 받은 데이터는 남습니다.
+
+### Docker Compose 로 설치한 경우
+```bash
+docker compose exec backend python -m app.cli probe --out /data/storage/probe_samples
+docker compose cp backend:/data/storage/probe_samples ./probe_samples
+```
+`.env` 의 키를 바꾼 뒤에는 `docker compose up -d` 로 백엔드를 다시 시작해야 반영됩니다.

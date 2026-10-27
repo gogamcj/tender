@@ -311,3 +311,58 @@ BID_USERNAME=admin python scripts/load_sample_data.py
 
 ### 다음 단계
 9단계: Docker Compose(백엔드·프런트엔드·DB), 백업·복원 스크립트, 설치·API 키·엑셀 업로드·백업 매뉴얼, 깨끗한 환경에서 설치 검증, 최종 구현·미구현 정리
+
+## 9단계 — Docker Compose 전체 실행, 백업·복원, 매뉴얼, 깨끗한 환경 설치 검증 (2026-10-27)
+
+### 생성·수정한 파일
+- 생성: `backend/Dockerfile`, `backend/.dockerignore`, `frontend/Dockerfile`, `frontend/nginx.conf`, `frontend/.dockerignore`
+- 생성: `scripts/backup.sh`, `scripts/restore.sh`, `docs/install.md`, `docs/backup-restore.md`
+- 수정: `docker-compose.yml`(db + backend + frontend), `backend/pyproject.toml`(누락 의존성 추가), `.env.example`, `README.md`, `docs/{upload-guide,api-auth-guide,known-limitations}.md`
+
+### 구현한 기능
+- `docker compose up -d --build` 한 번으로 PostgreSQL 16 + 백엔드(시작 시 마이그레이션 자동 적용, 비루트 사용자, 헬스체크) + 웹(nginx, `/api` 같은 출처 전달, SPA 경로, 업로드 25MB, 보안 헤더)
+- 포트는 기본적으로 이 컴퓨터(127.0.0.1)에만 열림. DB 비밀번호·API 키는 `.env` 로만 전달
+- 백업: DB(pg_dump) + 업로드 원본 + 체크섬·마이그레이션 버전·공고 수 기록, 덤프 읽기 검사, `.env` 는 제외
+- 복원: 체크섬 확인 → 'RESTORE' 입력 확인 → **현재 상태 자동 안전 백업** → 쓰기 중지 → DB·원본 교체 → 재시작. 실패 시 되돌릴 경로 안내
+
+### 깨끗한 환경 설치 검증 (실제로 한 것)
+1. git 에 올라갈 파일만 새 폴더로 복사(로컬 venv·node_modules·DB·.env 없음), `.env.example` → `.env`, 무작위 DB 비밀번호
+2. 이미지 빌드 → `docker compose up` → **백엔드가 시작하지 못함**: `argon2-cffi`·`httpx` 가 `pyproject.toml` 필수 의존성에 빠져 있었음(개발 환경에는 따로 설치되어 있어 테스트로는 드러나지 않던 결함). 추가 후 재빌드
+3. db·backend healthy, 웹 200. 관리자·조회 전용 계정 생성(명령줄), 샘플 240건 등록
+4. 이 Docker 구성(PostgreSQL)에 대해 Playwright 점검: 17개 화면 PC·모바일 오류 0건, 기능 흐름 **20개 통과**
+5. 백업 → 업로드 1건 추가 → 복원: 업로드 작업 수가 백업 시점으로 돌아옴, PDF 원본 파일·로그인·화면 정상. 첫 복원 시도에서 `/data/storage` 가 마운트 지점이라 지우지 못하는 결함을 발견해 고침(안의 파일만 지우도록)
+
+### 실행한 테스트와 결과
+- 백엔드 `pytest`(SQLite + PostgreSQL 16): **358 passed**(의존성 수정 후 재실행)
+- 프런트엔드 `npm test` 13 passed, `npm run build` 성공, `npm run e2e` 20 passed(Vite 미리보기 + SQLite, Docker + PostgreSQL 두 구성 모두)
+
+### 확인하지 못한 항목
+- Windows·macOS 의 Docker Desktop 에서 실행(검증은 Linux Docker Engine 29 에서만)
+- 이 개발 환경은 Docker Hub 요청 한도에 걸려 같은 이미지를 미러(mirror.gcr.io)에서 받아 확인했습니다. 일반 환경에서는 `docker compose up --build` 가 Docker Hub 에서 바로 받습니다
+- HTTPS 리버스 프록시 구성(문서로만 안내)
+
+## 최종 정리 — 구현·검증 범위
+
+### 구현하고 검증한 것
+| 영역 | 내용 | 검증 |
+|---|---|---|
+| 수집 | 조달청 3개 서비스 연결, 일일 한도 보호, 원본 보관, 변경 이력 | 단위·통합 테스트(가짜 응답). **실제 API 호출은 미검증** |
+| 업로드 | XLSX·XLS·CSV, 열 연결, 미리보기, 변경 확인 후 반영, 되돌리기, 보고서 | 테스트 + 화면 E2E |
+| 계산 | 투찰률·하한금액·A값·예정가격(예비가격 평균)·부가세, Decimal, 단수처리 명시 | 단위 테스트 |
+| 규칙 | 유효기간·소급 금지·검증 상태, 미검증 규칙은 확정 결과 아님 | 테스트 + 화면 |
+| 분석 | 과거 결과 통계(조건별 층 분리), 유사 입찰, 복수예비가격, 분석 재현 | 테스트 + 화면 |
+| 추천 | 보수·중립·공격·사용자 시나리오, 과거 사정률 적용 결과 건수(확률 아님) | 테스트 + 화면 |
+| 원가·적격심사 | 미입력 항목을 0 으로 보지 않음, 미확인 항목은 점수 범위로 | 테스트 + 화면 |
+| PDF | 텍스트 PDF 항목 추출·검토·반영(덮어쓰기는 명시적으로만) | 생성한 샘플 PDF 로만 |
+| 인증 | Argon2id, 세션, 잠금, 3개 역할, 원가 열람 제한 | 테스트 + 화면 |
+| 보고서 | XLSX·CSV 5종, 수식 주입 방지 | 테스트 + 다운로드 E2E |
+| 화면 | 17개 메뉴, 차트 8종, 모바일 | Vitest + Playwright |
+| 운영 | Docker Compose, 백업·복원 | 깨끗한 폴더 설치·복원 실제 수행 |
+
+### 구현하지 않았거나 검증하지 못한 것
+- 실제 공공데이터 API 응답(이 개발 환경에서 data.go.kr 접속 차단). 사용자 PC 에서 `probe` 결과를 받아 응답 필드명을 맞춰야 합니다
+- 실제 공고문 PDF 추출률, 스캔 PDF OCR(미구현)
+- 낙찰하한율 등 실제 규정 값: 규칙은 모두 사용자가 원문을 보고 등록·검증해야 합니다(예시 규칙은 가상)
+- 낙찰 확률: 검증된 모델이 없으므로 제공하지 않음(의도)
+- 실제 입찰 제출 자동화: 하지 않음(요구사항)
+- 정기 자동 수집, 알림(메일·푸시), PDF 보고서, 다크 모드

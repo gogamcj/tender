@@ -10,7 +10,18 @@
 
 개발 단계별 진행 상황과 구현·미구현 범위는 [docs/progress.md](docs/progress.md), 알려진 제한사항은 [docs/known-limitations.md](docs/known-limitations.md) 에 있습니다.
 
-## 빠른 시작 (백엔드, 개발용 SQLite)
+## 설치 (Docker Compose)
+
+```bash
+cp .env.example .env                 # POSTGRES_PASSWORD 등 수정
+docker compose up -d --build
+docker compose exec backend python -m app.cli create-user admin --role admin
+# http://localhost:8080
+```
+
+자세한 내용: [설치 매뉴얼](docs/install.md), [API 인증 안내](docs/api-auth-guide.md), [엑셀 업로드 안내](docs/upload-guide.md), [백업·복원](docs/backup-restore.md), [알려진 제한사항](docs/known-limitations.md)
+
+## 빠른 시작 (개발, 백엔드 SQLite)
 
 ```bash
 cd backend
