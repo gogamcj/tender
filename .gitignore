@@ -9,3 +9,5 @@ node_modules/
 dist/
 backend/storage/
 backups/
+e2e-out/
+*.tsbuildinfo

@@ -262,3 +262,52 @@ curl -b ck -o notices.xlsx 'localhost:8000/api/reports/notices.xlsx?agency=샘�
 
 ### 다음 단계
 8단계: React + TypeScript 화면 17개 메뉴, 차트, Vitest·Playwright
+
+## 8단계 — React 웹 화면 17개 메뉴, 차트, 화면 테스트 (2026-10-27)
+
+### 생성·수정한 파일
+- 생성: `frontend/` 전체(Vite 5 + React 18 + TypeScript + Tailwind 3 + Recharts 2 + Vitest 2)
+  - `src/api/client.ts`(API 호출·오류 문구), `src/lib/{format,auth,useAsync,useNoticeParam}`, `src/components/{Layout,ui,charts,NoticePicker,CalcResultView,AnalysisFilters}.tsx`
+  - `src/pages/` 17개 메뉴 + 로그인: Dashboard, NoticeSearch, NoticeAnalysis, PdfAnalysis, Calculator, ReserveAnalysis, HistoryAnalysis, SimilarSearch, Scenarios, Qualification, Costs, Favorites, Collections, Imports, Rules, Reports, Settings, Login
+  - `src/test/{format.test.ts,components.test.tsx}`, `e2e/{smoke,flows}.cjs`(Playwright)
+- 생성: `scripts/load_sample_data.py`(실행 중인 서버에 가상 샘플 240건·예시 규칙 등록)
+
+### 구현한 기능
+- 17개 메뉴 전부 실제 API 에 연결(화면만 있고 동작하지 않는 메뉴 없음). 로그인하지 않으면 로그인 화면, 권한별로 버튼 숨김(조회 전용은 변경·원가 화면 불가, 관리자만 규칙 등록·검증·수집 실행·사용자 관리)
+- 모바일(폭 390px): 메뉴 접기, 핵심 숫자·경고 먼저, 복잡한 표는 가로 스크롤, 공고 목록은 카드형. 페이지 가로 넘침 없음(17개 화면 자동 점검)
+- 차트 8종: 기간별 낙찰률, 사정률 분포, 발주기관별 비교, 공종별 비교, 금액 구간별 분포, 참여 업체 수 분포, 후보 투찰금액별 결과 비교(과거 사정률 적용 시 하한 미달·예정가격 초과 건수), 원가와 예상 이익 비교
+  - 모든 차트에 분석 기간·표본 수·기준 금액·데이터 출처 표시, 표본 30건 미만 경고(10건 미만 '매우 적음'), '표로 보기' 제공
+  - 색은 검증한 범주 팔레트 앞 3색만 사용, 계열 2개 이상이면 범례
+- 공고 검색: 검색 조건 저장·불러오기, 관심 공고 ☆, 검색 조건 그대로 XLSX·CSV
+- 엑셀 업로드: 파일 → 시트·열 연결(정확히 같은 이름만 자동) → 변환 옵션 → 미리보기(새 공고·변경·중복·오류 수, 행별 오류·변경 내용) → '기존과 다름' 행은 체크해야만 반영 → 저장 결과·보고서 CSV → 되돌리기
+- PDF: 같은 파일을 다시 올리면 새로 만들지 않고 기존 분석 결과를 엶
+- 금액은 화면에서도 문자열로 다루고 표시 때만 천 단위 쉼표(부동소수점 변환 없음). 입력 칸마다 형식 오류 표시
+- API 장애: 연결 실패·서버 오류(5xx)·입력 오류(422)를 구분한 안내와 '다시 시도'
+
+### 실행 방법
+```
+# 백엔드(다른 터미널)
+cd backend && uvicorn app.main:app
+# 프런트엔드 개발 서버: http://localhost:5173 (/api 는 8000 번으로 전달)
+cd frontend && npm ci && npm run dev
+# 빌드·미리보기: http://localhost:4173
+npm run build && npm run preview
+# 샘플 데이터(가상)
+BID_USERNAME=admin python scripts/load_sample_data.py
+```
+
+### 실행한 테스트와 결과
+- `npx tsc --noEmit`: 오류 없음, `npm run build`: 성공(차트·라이브러리 분할, 가장 큰 파일 gzip 104KB)
+- `npm test`(Vitest): **13 passed** — 금액·비율 입력 검사, 오류 문구, 차트 메타·소표본 경고·표 보기, 오류 상자, 로그인 실패, 조회 전용 원가 차단, 계산기 입력 오류, API 500 안내
+- `npm run e2e`(Playwright, 실제 백엔드 + vite preview + 샘플 240건, PC 1366px·모바일 390px):
+  - 17개 화면 열기: 콘솔 오류·API 4xx/5xx·가로 넘침 **0건**(PC·모바일)
+  - 기능 흐름 **20개 통과**: 로그인 실패, 계산기 입력 오류, 검색 필터, 과거 결과 차트→표 전환, 시나리오 계산·저장, 저장 분석 XLSX 다운로드, 엑셀 업로드 미리보기(오류 행 표시), PDF 업로드·중복 파일, API 연결 실패·500 안내(PC·모바일 각각), 조회 전용 원가 차단·규칙 상태 변경 불가
+- 백엔드 변경 없음(`scripts/load_sample_data.py` 추가만)
+
+### 확인하지 못한 항목
+- 실제 휴대폰 브라우저(iOS Safari·Android Chrome) 실기 확인. 자동 점검은 Chromium 의 모바일 폭으로만 했습니다
+- 화면 낭독기 등 보조기기 실사용 점검(레이블·role 은 넣었으나 별도 접근성 감사는 안 함)
+- 다크 모드는 지원하지 않습니다
+
+### 다음 단계
+9단계: Docker Compose(백엔드·프런트엔드·DB), 백업·복원 스크립트, 설치·API 키·엑셀 업로드·백업 매뉴얼, 깨끗한 환경에서 설치 검증, 최종 구현·미구현 정리

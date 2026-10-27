@@ -34,6 +34,17 @@ cd backend && alembic upgrade head
 BID_TEST_PG_URL=postgresql+psycopg://bid:<비밀번호>@localhost:5432/bid_test pytest
 ```
 
+## 웹 화면 (개발)
+
+```bash
+cd frontend
+npm ci
+npm run dev        # http://localhost:5173 (백엔드 8000 번으로 /api 전달)
+npm test           # Vitest
+```
+
+가상 샘플 데이터를 넣어 보려면 서버를 켠 뒤 `BID_USERNAME=admin python scripts/load_sample_data.py` 를 실행합니다(운영 DB 에는 넣지 마세요).
+
 ## 구조
 
 ```
@@ -44,5 +55,7 @@ backend/
   app/api             FastAPI 라우터
   alembic             마이그레이션
   tests               단위·통합 테스트
+frontend/             React + TypeScript 웹 화면(17개 메뉴), Vitest, e2e(Playwright)
+scripts/              샘플 데이터 등록 등 보조 스크립트
 docs/                 설계·진행·제한사항 문서
 ```
