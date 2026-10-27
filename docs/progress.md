@@ -188,3 +188,39 @@ curl -X POST localhost:8000/api/recommend -H 'Content-Type: application/json' \
 
 ### 다음 단계
 6단계: PDF 공고문 분석(텍스트 추출, 항목별 페이지·신뢰도, 사용자 검토 후 반영)
+
+## 6단계 — PDF 공고문 분석 (2026-10-27)
+
+### 생성·수정한 파일
+- 생성: `backend/app/pdf/{extract,fields,__init__}.py` — 텍스트·표 추출, 항목 후보 찾기(쪽·원문·위치·신뢰도)
+- 생성: `backend/app/services/pdfs.py`, `backend/app/api/pdfs.py`
+- 생성: `backend/tests/pdf_samples.py`(가상 공고문 PDF 생성), `backend/tests/unit/test_pdf_fields.py`, `backend/tests/integration/test_pdf_api.py`
+- 생성: `backend/seed/generate_sample_notice_pdf.py`, `backend/seed/sample_notice.pdf`
+- 수정: `pyproject.toml`(pdfplumber, 개발용 reportlab), `app/db/base.py`(금액·일시 컬럼의 Python 형식 표시), `app/main.py`
+
+### 구현한 기능
+- PDF 업로드(같은 파일 중복 거부, 원본 보관), 형식·암호화·용량·쪽수 검사, 텍스트 레이어 유무 판정
+- 16개 항목 후보 추출: 공고번호, 공고명, 공고·수요기관, 기초금액, 추정가격, 낙찰하한율, A값, 입찰마감·개찰일시, 계약방법, 낙찰자 결정방법, 예비가격 범위, 부가세 포함 여부, 지역제한, 참가자격
+  - 후보마다 쪽 번호, 원문 줄, 위치(좌표), 표 위치, 추출 방식, 신뢰도
+  - 같은 항목에서 값이 다르면 '불일치'로 표시하고 고르지 않음
+  - 문장 속 언급(예: '기초금액의 ±2%')은 후보로 잡지 않음, 원 단위가 아닌 금액은 변환하지 않음
+- 검토: 확인·수정·기각, 수정 값 형식 검사, 찾지 못한 항목 직접 입력, 쪽 원문 보기, 연결된 공고 값과 나란히 비교
+- 반영: 확인·수정된 값만, 공고가 비어 있으면 반영(이력 기록), 다른 값이 있으면 보류 변경으로 남김(명시적 덮어쓰기 지정 시에만 반영), 확인된 값끼리 다르면 반영 거부, 참고용 항목(A값·지역제한 등)은 반영하지 않음
+- 고친 결함: 보류 변경을 반영할 때 일시 항목(입찰마감 등)이 문자열로 들어가 저장에 실패하던 문제
+
+### 실행 방법
+```
+cd backend && pip install -e ".[dev]" && uvicorn app.main:app --reload
+curl -F file=@seed/sample_notice.pdf -F notice_id=1 localhost:8000/api/pdfs
+```
+
+### 실행한 테스트와 결과
+- `pytest` 전체(SQLite + PostgreSQL 16): **318 passed**
+  - 이번 단계 추가: PDF 추출 단위 7개, PDF API 통합 10개(5개 × 2 DB)
+
+### 확인하지 못한 항목
+- 실제 공고문 PDF(나라장터·지자체 양식)에서의 추출률. 실제 파일을 받으면 표제어 사전을 보완해야 합니다.
+- 스캔 PDF OCR
+
+### 다음 단계
+7단계: React + TypeScript 웹 화면(17개 메뉴), 차트, Vitest·Playwright

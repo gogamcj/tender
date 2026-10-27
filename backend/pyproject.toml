@@ -20,10 +20,11 @@ dependencies = [
     "openpyxl>=3.1",
     "python-multipart>=0.0.9",
     "xlrd>=2.0",
+    "pdfplumber>=0.11",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "httpx>=0.27", "xlwt>=1.3"]
+dev = ["pytest>=8", "httpx>=0.27", "xlwt>=1.3", "reportlab>=4.2"]
 
 [tool.setuptools.packages.find]
 include = ["app*"]
@@ -31,4 +32,4 @@ include = ["app*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
-filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`", "ignore:ast.NameConstant is deprecated:DeprecationWarning"]

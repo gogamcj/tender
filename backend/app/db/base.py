@@ -36,6 +36,10 @@ class ExactDecimal(TypeDecorator):
     impl = Numeric
     cache_ok = True
 
+    @property
+    def python_type(self) -> type:
+        return Decimal
+
     def __init__(self, precision: int, scale: int) -> None:
         super().__init__(precision=precision, scale=scale, asdecimal=True)
         self.precision = precision
@@ -94,6 +98,10 @@ class UTCDateTime(TypeDecorator):
 
     impl = DateTime(timezone=True)
     cache_ok = True
+
+    @property
+    def python_type(self) -> type:
+        return datetime
 
     def process_bind_param(self, value, dialect):
         if value is None:
