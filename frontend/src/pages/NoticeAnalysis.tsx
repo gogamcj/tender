@@ -5,7 +5,7 @@ import type { Notice } from "../api/types";
 import { NoticePicker } from "../components/NoticePicker";
 import { Badge, Empty, ErrorBox, Loading, Section } from "../components/ui";
 import { useAuth } from "../lib/auth";
-import { day, dt, label, pct, won } from "../lib/format";
+import { DATA_STATUS, day, dt, ko, label, LOOKUP_STATUS, OPENING_STATUS, pct, SOURCE_NAME, won } from "../lib/format";
 import { useAsync } from "../lib/useAsync";
 import { useNoticeParam } from "../lib/useNoticeParam";
 
@@ -77,10 +77,10 @@ export default function NoticeAnalysis() {
         return (
           <>
             <div className="card mb-3">
-              <div className="text-xs text-slate-500">{n.notice_number}-{n.notice_revision} · {n.source_name}</div>
+              <div className="text-xs text-slate-500">{n.notice_number}-{n.notice_revision} · {ko(SOURCE_NAME, n.source_name)}</div>
               <h2 className="text-lg font-bold">{n.title}</h2>
               <div className="mt-1 flex flex-wrap gap-1">
-                <Badge tone={n.data_status === "collected" || n.data_status === "verified" ? "green" : "amber"}>{n.data_status_label || n.data_status}</Badge>
+                <Badge tone={n.data_status === "collected" || n.data_status === "verified" ? "green" : "amber"}>{n.data_status_label || ko(DATA_STATUS, n.data_status)}</Badge>
                 <Badge>{label(n.phase)}</Badge>
                 {!n.is_latest_revision && <Badge tone="red">최신 차수 아님</Badge>}
                 {pending.length > 0 && <Badge tone="amber">보류 변경 {pending.length}건</Badge>}
@@ -118,7 +118,7 @@ export default function NoticeAnalysis() {
                   <label className="mt-2 block">
                     <span className="label">데이터 상태 바꾸기(이력이 남습니다)</span>
                     <select className="input" value={n.data_status} onChange={(e) => void changeStatus(e.target.value)}>
-                      {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                      {STATUSES.map((s) => <option key={s} value={s}>{ko(DATA_STATUS, s)}</option>)}
                     </select>
                   </label>
                 )}
@@ -128,9 +128,9 @@ export default function NoticeAnalysis() {
                   <Empty>개찰 결과가 없습니다. 결과가 없다는 것은 유찰을 뜻하지 않습니다.</Empty>
                 ) : n.results.map((r) => (
                   <div key={r.id} className="mb-3">
-                    <div className="text-xs text-slate-500">출처 {r.source_name} · 재입찰 {r.rebid_number} · 조회 상태 {r.lookup_status}</div>
+                    <div className="text-xs text-slate-500">출처 {ko(SOURCE_NAME, r.source_name)} · 재입찰 {r.rebid_number} · 조회 상태 {ko(LOOKUP_STATUS, r.lookup_status)}</div>
                     <dl>
-                      <Row k="개찰 상태" v={r.opening_status} /><Row k="참가업체수" v={r.bid_count} />
+                      <Row k="개찰 상태" v={ko(OPENING_STATUS, r.opening_status)} /><Row k="참가업체수" v={r.bid_count} />
                       <Row k="낙찰업체" v={r.winning_vendor_name} /><Row k="낙찰금액" v={won(r.winning_bid_amount)} />
                       <Row k="낙찰률" v={r.winning_rate ? `${pct(r.winning_rate)} (${label(r.winning_rate_basis) || "기준 미상"} 대비)` : "-"} />
                       <Row k="확정 예정가격" v={won(r.actual_estimated_price)} /><Row k="사정률" v={pct(r.actual_sajeong_rate)} />

@@ -32,13 +32,8 @@ export function Warnings({ items, tone = "amber" }: { items?: (string | null | u
         const m = /^([A-Z_]+):\s*(.*)$/.exec(w);
         return (
           <li key={i}>
-            {m ? (
-              <>
-                {m[2]} <span className="text-xs opacity-60">({m[1]})</span>
-              </>
-            ) : (
-              w
-            )}
+            {/* 코드(영문)는 화면에 보이지 않게 하고 문의할 때를 위해 마우스를 올리면 보이게 둔다 */}
+            {m ? <span title={m[1]}>{m[2]}</span> : w}
           </li>
         );
       })}

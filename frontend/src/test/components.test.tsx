@@ -101,7 +101,7 @@ describe("데이터 수집 관리", () => {
       return [200, []];
     });
     app("/collections");
-    expect(await screen.findByText("인증키 오류 (30)")).toBeInTheDocument();
+    expect(await screen.findByText("인증키 오류")).toBeInTheDocument();
     expect(screen.getByText("SERVICE_KEY_IS_NOT_REGISTERED_ERROR")).toBeInTheDocument();
     expect(screen.getByText("응답 0건")).toBeInTheDocument();
   });

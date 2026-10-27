@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.deps import require_admin
-from app.connectors.specs import NOTICE_FIELD_MAP, OPERATIONS, QueryMode
+from app.connectors.specs import NOTICE_FIELD_MAP, OPERATIONS, QueryMode, operation_label
 from app.core.config import get_settings
 from app.db.models import DataCollectionJob
 from app.db.session import get_session, get_session_factory
@@ -81,7 +81,8 @@ def start(
 
 def _out(job: DataCollectionJob) -> dict:
     return {
-        "id": job.id, "source_name": job.source_name, "operation": job.operation, "query_parameters": job.query_parameters,
+        "id": job.id, "source_name": job.source_name, "operation": job.operation,
+        "operation_label": operation_label(job.source_name, job.operation), "query_parameters": job.query_parameters,
         "status": job.status.value, "started_at": job.started_at.isoformat(),
         "finished_at": job.finished_at.isoformat() if job.finished_at else None,
         "request_count": job.request_count, "inserted_count": job.inserted_count, "updated_count": job.updated_count,

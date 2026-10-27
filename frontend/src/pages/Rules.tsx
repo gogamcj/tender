@@ -4,7 +4,7 @@ import type { CalcResult } from "../api/types";
 import { CalcResultView } from "../components/CalcResultView";
 import { Badge, Empty, ErrorBox, Field, Loading, Section, Warnings } from "../components/ui";
 import { useAuth } from "../lib/auth";
-import { label, parseWonInput } from "../lib/format";
+import { ko, label, parseWonInput, RULE_MODULE } from "../lib/format";
 import { useAsync } from "../lib/useAsync";
 
 interface Rule {
@@ -30,6 +30,11 @@ const TEMPLATE = JSON.stringify({
   applicability: { amount_basis: "presumed_price", amount_min: null, amount_max_exclusive: null },
   notes: null,
 }, null, 2);
+
+// 규칙 계산 값 표시(하한율·기준가격 등)
+const PARAM_LABEL: Record<string, string> = { lower_limit_rate_pct: "하한율(%)", reference: "기준" };
+const ruleParams = (p: Record<string, unknown>) =>
+  Object.entries(p).map(([k, v]) => `${PARAM_LABEL[k] ?? k} ${label(String(v))}`).join(", ");
 
 const tone = (s: string) => (s === "verified" ? "green" : s === "retired" ? "slate" : "amber");
 
@@ -77,9 +82,9 @@ export default function Rules() {
                 {rules.data!.map((r) => (
                   <tr key={r.id}>
                     <td>{r.rule_code}</td><td className="whitespace-normal">{r.rule_name}</td>
-                    <td>{label(r.procurement_type)} · {label(r.issuing_authority_type)}</td><td>{r.contract_method} · {r.award_method}</td>
+                    <td>{label(r.procurement_type)} · {label(r.issuing_authority_type)}</td><td>{label(r.contract_method)} · {label(r.award_method)}</td>
                     <td>{r.effective_from} ~ {r.effective_until ?? "현재"}</td>
-                    <td className="text-xs">{r.formula_definition.module}<br />{JSON.stringify(r.formula_definition.params)}</td>
+                    <td className="text-xs">{ko(RULE_MODULE, r.formula_definition.module)}<br />{ruleParams(r.formula_definition.params)}</td>
                     <td className="max-w-xs whitespace-normal text-xs">{r.source_document}{r.source_url && <> · <a className="underline" href={r.source_url} target="_blank" rel="noreferrer">원문</a></>}</td>
                     <td>
                       {isAdmin ? (
@@ -97,7 +102,7 @@ export default function Rules() {
       </Section>
       {isAdmin && (
         <Section title="새 규칙 등록(JSON)">
-          <p className="mb-1 text-xs text-slate-600">계산 모듈: simple_lower_limit(기준가격 × 하한율), a_value_lower_limit(A값 + (예정가격 − A값) × 하한율). 예시 값은 실제 규정이 아니므로 반드시 원문을 확인해 고치세요. 새 규칙은 '미검증'으로 등록됩니다.</p>
+          <p className="mb-1 text-xs text-slate-600">계산 방식(JSON 의 module 값): "simple_lower_limit" = 기준가격 × 하한율, "a_value_lower_limit" = A값 + (예정가격 − A값) × 하한율. 예시 값은 실제 규정이 아니므로 반드시 원문을 확인해 고치세요. 새 규칙은 '미검증'으로 등록됩니다.</p>
           <textarea className="input h-72 font-mono text-xs" aria-label="규칙 JSON" value={json} onChange={(e) => setJson(e.target.value)} />
           {jsonErr && <p className="text-sm text-red-700" role="alert">{jsonErr}</p>}
           <button className="btn-primary mt-2" onClick={() => void create()}>등록</button>

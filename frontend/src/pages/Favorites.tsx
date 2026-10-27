@@ -10,6 +10,13 @@ import { useAsync } from "../lib/useAsync";
 interface Fav { id: number; memo: string | null; created_at: string; notice: Notice }
 interface SavedFilter { id: number; name: string; filter_type: string; criteria: Record<string, unknown>; created_at: string }
 
+const CRITERIA_LABEL: Record<string, string> = {
+  q: "검색어", agency: "기관", industry: "업종", region: "지역", procurement_type: "업무구분", award_method: "낙찰자 결정방법",
+  amount_min: "금액 이상", amount_max: "금액 이하", date_from: "공고일 시작", date_to: "공고일 끝", has_result: "개찰 결과", phase: "단계", sort: "정렬",
+};
+const CRITERIA_VALUE: Record<string, string> = {
+  true: "있음", false: "없음", "-announcement_date": "공고일 최신순", "-opening_date": "개찰일 최신순", "-base_amount": "금액 큰 순", base_amount: "금액 작은 순",
+};
 const FILTER_TYPE: Record<string, string> = { search: "공고 검색", analysis: "분석 조건", interest: "관심 조건" };
 
 export default function Favorites() {
@@ -24,7 +31,8 @@ export default function Favorites() {
     try { await fn(); reload(); } catch (e) { setErr(e as Error); }
   };
   const criteriaText = (c: Record<string, unknown>) =>
-    Object.entries(c).filter(([, v]) => v !== "" && v !== null && v !== undefined).map(([k, v]) => `${k}=${String(v)}`).join(", ") || "(조건 없음)";
+    Object.entries(c).filter(([k, v]) => v !== "" && v !== null && v !== undefined && !(k === "sort" && v === "-announcement_date"))
+      .map(([k, v]) => `${CRITERIA_LABEL[k] ?? k}: ${CRITERIA_VALUE[String(v)] ?? label(String(v))}`).join(", ") || "(조건 없음)";
 
   return (
     <div>

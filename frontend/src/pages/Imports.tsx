@@ -91,7 +91,7 @@ export default function Imports() {
       {an && (
         <Section title="2. 시트와 열 연결">
           <Warnings items={an.warnings} />
-          <p className="text-xs text-slate-600">{an.file_name} · {an.source_type}{an.encoding ? ` · ${an.encoding}` : ""} · 이름이 정확히 같은 열만 자동 연결했습니다. 나머지는 직접 고르세요.</p>
+          <p className="text-xs text-slate-600">{an.file_name}{an.encoding ? ` · 글자 인코딩 ${an.encoding.toLowerCase().startsWith("utf") ? "UTF-8" : an.encoding.toLowerCase() === "cp949" || an.encoding.toLowerCase() === "euc-kr" ? "한글 완성형(CP949)" : an.encoding}` : ""} · 이름이 정확히 같은 열만 자동 연결했습니다. 나머지는 직접 고르세요.</p>
           {an.sheets.length > 1 && (
             <Field label="시트">
               <select className="input w-48" value={sheet} onChange={(e) => { setSheet(e.target.value); setMapping(an.sheets.find((s) => s.name === e.target.value)?.suggested_mapping ?? {}); }}>

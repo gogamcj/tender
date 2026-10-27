@@ -4,7 +4,7 @@ import { ChartFrame, GroupedBar } from "../components/charts";
 import { NoticePicker } from "../components/NoticePicker";
 import { Badge, Empty, ErrorBox, Field, Loading, Section, Warnings } from "../components/ui";
 import { useAuth } from "../lib/auth";
-import { parseRateInput, parseWonInput, pct, won } from "../lib/format";
+import { ko, parseRateInput, parseWonInput, pct, PROFIT_STATUS, won } from "../lib/format";
 import { useAsync } from "../lib/useAsync";
 import { useNoticeParam } from "../lib/useNoticeParam";
 
@@ -135,7 +135,7 @@ export default function Costs() {
                 <>
                   <div className="table-wrap mt-2">
                     <table className="tbl"><thead><tr><th>투찰금액</th><th>공급가액</th><th>이익</th><th>이익률</th><th>표시</th></tr></thead>
-                      <tbody>{evalOut.rows.map((r) => <tr key={r.bid}><td>{won(r.bid)}</td><td>{won(r.p.bid_supply_amount)}</td><td>{r.p.profit ? won(r.p.profit) : r.p.status}</td><td>{pct(r.p.margin_pct, 2)}</td><td className="whitespace-normal text-xs">{[...r.p.flags, ...r.p.warnings].join(" / ")}</td></tr>)}</tbody>
+                      <tbody>{evalOut.rows.map((r) => <tr key={r.bid}><td>{won(r.bid)}</td><td>{won(r.p.bid_supply_amount)}</td><td>{r.p.profit ? won(r.p.profit) : ko(PROFIT_STATUS, r.p.status)}</td><td>{pct(r.p.margin_pct, 2)}</td><td className="whitespace-normal text-xs">{[...r.p.flags, ...r.p.warnings].join(" / ")}</td></tr>)}</tbody>
                     </table>
                   </div>
                   <ChartFrame title="원가와 예상 이익 비교" meta={{ n: evalOut.rows.length, basis: `총원가(공급가액) ${won(current?.summary.supply_total)}`, sources: "사용자 입력 원가" }}

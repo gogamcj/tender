@@ -3,7 +3,7 @@ import { ApiError, get, patch, post, upload } from "../api/client";
 import { NoticePicker } from "../components/NoticePicker";
 import { Badge, Empty, ErrorBox, Loading, Section, Warnings } from "../components/ui";
 import { useAuth } from "../lib/auth";
-import { dt, label } from "../lib/format";
+import { APPLY_STATUS, dt, FIELD_LABEL, ko, label, yesNo } from "../lib/format";
 import { useAsync } from "../lib/useAsync";
 import { useNoticeParam } from "../lib/useNoticeParam";
 
@@ -116,15 +116,15 @@ export default function PdfAnalysis() {
               <div key={name} className={`card ${f.conflict ? "border-red-300" : ""}`}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 className="font-semibold">{f.label} {f.conflict && <Badge tone="red">값 불일치</Badge>} {!f.found && <Badge>못 찾음</Badge>}</h3>
-                  {f.notice_value && <span className="text-xs text-slate-600">공고 현재 값: {Object.entries(f.notice_value).map(([k, v]) => `${k}=${v ?? "비어 있음"}`).join(", ")}</span>}
+                  {f.notice_value && <span className="text-xs text-slate-600">공고 현재 값: {Object.entries(f.notice_value).map(([k, v]) => `${FIELD_LABEL[k] ?? k} ${yesNo(v) ?? "비어 있음"}`).join(", ")}</span>}
                 </div>
                 {f.candidates.map((c) => (
                   <div key={c.id} className="mt-2 rounded border p-2 text-sm">
                     <div className="flex flex-wrap items-center gap-2">
-                      <strong>{c.value ?? "(해석 불가)"}</strong>
+                      <strong>{yesNo(c.value) ?? "(해석 불가)"}</strong>
                       {conf(c.confidence)}
                       <Badge tone={c.review_status === "confirmed" || c.review_status === "corrected" ? "green" : c.review_status === "rejected" ? "red" : "slate"}>{label(c.review_status)}</Badge>
-                      {c.final_value && c.review_status === "corrected" && <span>→ 수정 값: <strong>{c.final_value}</strong></span>}
+                      {c.final_value && c.review_status === "corrected" && <span>→ 수정 값: <strong>{yesNo(c.final_value)}</strong></span>}
                       {c.page_number && <button className="text-xs text-blue-700 underline" onClick={() => void showPage(c.page_number!)}>{c.page_number}쪽 원문{c.table_ref ? ` (표 ${c.table_ref})` : ""}</button>}
                     </div>
                     {c.raw_text && <div className="mt-1 break-all text-xs text-slate-600">원문: “{c.raw_text}”</div>}
@@ -159,7 +159,7 @@ export default function PdfAnalysis() {
             <Section title="반영 결과">
               <ul className="text-sm">
                 {Object.entries(applyReport).map(([k, r]) => (
-                  <li key={k}>{k}: <Badge tone={r.status === "applied" ? "green" : r.status === "pending" ? "amber" : "slate"}>{r.status}</Badge> {r.old !== undefined && `${r.old ?? "없음"} → ${r.new}`} {r.reason}</li>
+                  <li key={k}>{doc.data?.fields[k]?.label ?? FIELD_LABEL[k] ?? k}: <Badge tone={r.status === "applied" ? "green" : r.status === "pending" ? "amber" : "slate"}>{ko(APPLY_STATUS, r.status)}</Badge> {r.old !== undefined && `${yesNo(r.old) ?? "없음"} → ${yesNo(r.new)}`} {r.reason}</li>
                 ))}
               </ul>
             </Section>

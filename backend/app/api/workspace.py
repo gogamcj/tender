@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import current_user
 from app.api.notices import notice_summary
+from app.connectors.specs import operation_label
 from app.core.config import get_settings
 from app.db.enums import DataStatus, NoticePhase, ReviewStatus
 from app.db.models import (
@@ -67,7 +68,8 @@ def dashboard(session: Session = Depends(get_session), user: User = Depends(curr
         },
         "pdf_unreviewed": _count(session, select(PdfExtraction.id).where(PdfExtraction.review_status == ReviewStatus.UNREVIEWED)),
         "recent_collections": [
-            {"id": j.id, "source_name": j.source_name, "operation": j.operation, "status": j.status.value,
+            {"id": j.id, "source_name": j.source_name, "operation": j.operation,
+             "operation_label": operation_label(j.source_name, j.operation), "status": j.status.value,
              "started_at": j.started_at.isoformat(), "inserted": j.inserted_count, "updated": j.updated_count}
             for j in session.scalars(select(DataCollectionJob).order_by(DataCollectionJob.id.desc()).limit(5))
         ],

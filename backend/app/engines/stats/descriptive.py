@@ -121,7 +121,7 @@ ALLOWED_DIMENSIONS = {
 
 METRICS = {
     "sajeong_rate": ("사정률(%)", "(예정가격 − 기초금액) ÷ 기초금액 × 100"),
-    "winning_rate": ("낙찰률(%)", "낙찰금액 ÷ 기준금액 × 100 (기준금액은 rate_basis)"),
+    "winning_rate": ("낙찰률(%)", "낙찰금액 ÷ 기준금액 × 100 (기준금액은 자료마다 지정된 예정가격·기초금액 등)"),
     "bid_count": ("참가업체 수", "개찰 결과의 참가업체 수"),
 }
 
@@ -198,8 +198,22 @@ def stratum_of(r: Record, metric: str) -> tuple:
     return tuple((k, None if r.get(k) is None else str(r.get(k))) for k in keys)
 
 
+# 화면 표시용 값 이름(내부 값은 영문 코드)
+VALUE_LABELS = {
+    "construction": "공사", "service": "용역", "goods": "물품", "foreign": "외자", "other": "기타",
+    "national": "국가기관", "local": "지방자치단체", "public_corp": "공기업·준정부기관",
+    "estimated_price": "예정가격", "base_amount": "기초금액", "presumed_price": "추정가격",
+}
+
+
+def _value_label(v: object) -> str:
+    if v is None:
+        return "미상"
+    return VALUE_LABELS.get(v, str(v)) if isinstance(v, str) else str(v)
+
+
 def stratum_label(key: tuple) -> str:
-    parts = [f"{STRATUM_LABELS[k]}={v if v is not None else '미상'}" for k, v in key]
+    parts = [f"{STRATUM_LABELS[k]}={_value_label(v)}" for k, v in key]
     return ", ".join(parts)
 
 

@@ -4,7 +4,7 @@ import { del, get, post, qs } from "../api/client";
 import type { Notice, Page } from "../api/types";
 import { Badge, Empty, ErrorBox, Loading, Pager } from "../components/ui";
 import { useAuth } from "../lib/auth";
-import { day, dt, label, parseWonInput, pct, won } from "../lib/format";
+import { DATA_STATUS, day, dt, ko, label, parseWonInput, pct, won } from "../lib/format";
 import { useAsync } from "../lib/useAsync";
 
 export interface SearchForm {
@@ -178,7 +178,7 @@ export default function NoticeSearch() {
                     <td className="text-right">{won(n.base_amount)}</td>
                     <td>{day(n.announcement_date)}</td>
                     <td>{dt(n.bid_deadline)}</td>
-                    <td><Badge tone={n.data_status === "collected" || n.data_status === "verified" ? "green" : "amber"}>{n.data_status_label || n.data_status}</Badge></td>
+                    <td><Badge tone={n.data_status === "collected" || n.data_status === "verified" ? "green" : "amber"}>{n.data_status_label || ko(DATA_STATUS, n.data_status)}</Badge></td>
                     <td className="text-right">{pct(n.result?.actual_sajeong_rate)}</td>
                     <td className="text-right">{pct(n.result?.winning_rate)}</td>
                   </tr>

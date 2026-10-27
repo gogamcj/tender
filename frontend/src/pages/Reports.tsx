@@ -9,7 +9,16 @@ import { useAsync } from "../lib/useAsync";
 interface Run { id: number; analysis_type: string; notice_id: number | null; confidence_status: string | null; dataset_version: string | null; created_at: string }
 interface Repro { run_id: number; data_changed: boolean; result_identical: boolean; note: string | null }
 
-const TYPE: Record<string, string> = { recommend: "투찰 시나리오", statistics: "과거 결과 분석", reserve: "복수예비가격 분석" };
+const TYPE: Record<string, string> = { recommend: "투찰 시나리오", stats: "과거 결과 분석", similar: "유사 입찰 검색", reserve: "복수예비가격 분석" };
+
+/** 데이터 버전(예: n=33;as_of=...;h=...)을 읽기 쉽게: 표본 수와 기준 시각만 보여 준다 */
+function versionText(v: string | null): string {
+  if (!v) return "-";
+  const parts = Object.fromEntries(v.split(";").map((x) => x.split("=") as [string, string]));
+  const n = parts.n ? `표본 ${parts.n}건` : "";
+  const asOf = parts.as_of ? ` · 기준 ${parts.as_of.slice(0, 10)}` : "";
+  return n || asOf ? `${n}${asOf}` : v.slice(0, 12);
+}
 
 function Links({ base }: { base: string }) {
   return (
@@ -51,7 +60,7 @@ export default function Reports() {
                     <tr key={r.id}>
                       <td>{r.id}</td><td>{TYPE[r.analysis_type] ?? r.analysis_type}</td>
                       <td>{r.notice_id ? <Link className="text-blue-700 underline" to={`/notice-analysis?notice=${r.notice_id}`}>{r.notice_id}</Link> : "-"}</td>
-                      <td>{label(r.confidence_status)}</td><td className="font-mono text-xs">{r.dataset_version?.slice(0, 12) ?? "-"}</td><td>{dt(r.created_at)}</td>
+                      <td>{label(r.confidence_status)}</td><td className="text-xs" title={r.dataset_version ?? ""}>{versionText(r.dataset_version)}</td><td>{dt(r.created_at)}</td>
                       <td><Links base={`/api/reports/runs/${r.id}`} /></td>
                       <td className="whitespace-normal text-xs">
                         {!rp ? <button className="btn-secondary text-xs" onClick={() => void reproduce(r.id)}>다시 계산</button>

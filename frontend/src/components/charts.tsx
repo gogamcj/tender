@@ -1,6 +1,7 @@
 // 차트 공통 틀: 모든 차트에 분석 기간·표본 수·기준 금액·출처를 표시하고, 표본이 적으면 경고한다.
 // 색은 검증된 범주 팔레트의 앞 3개만 쓴다(그 이상은 표로 본다). 차트마다 '표로 보기'를 제공한다.
 import { useState, type ReactNode } from "react";
+import { SOURCE_NAME } from "../lib/format";
 import {
   Bar,
   BarChart,
@@ -31,7 +32,7 @@ function sourcesText(s: ChartMeta["sources"]): string {
   if (!s) return "-";
   if (typeof s === "string") return s;
   const e = Object.entries(s);
-  return e.length ? e.map(([k, v]) => `${k} ${v}건`).join(", ") : "-";
+  return e.length ? e.map(([k, v]) => `${SOURCE_NAME[k] ?? k} ${v}건`).join(", ") : "-";
 }
 
 export function ChartFrame({
@@ -66,7 +67,7 @@ export function ChartFrame({
           ⚠ 표본이 {meta.n}건으로 {meta.n < TINY_SAMPLE ? "매우 " : ""}적습니다. 일반화하지 말고 참고용으로만 보세요.
         </p>
       )}
-      {meta.warnings?.map((w) => (
+      {meta.warnings?.map((raw) => raw.replace(/^[A-Z_]+:\s*/, "")).map((w) => (
         <p key={w} className="mt-1 text-xs text-amber-800">⚠ {w}</p>
       ))}
       <div className="mt-3">

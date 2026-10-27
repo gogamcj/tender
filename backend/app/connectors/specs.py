@@ -18,6 +18,7 @@ SCSBID_BASE = "https://apis.data.go.kr/1230000/as/ScsbidInfoService"  # portal
 OPEN_STD_BASE = "https://apis.data.go.kr/1230000/ao/PubDataOpnStdService"  # portal
 
 KIND_SUFFIX = {"construction": "Cnstwk", "service": "Servc", "goods": "Thng", "foreign": "Frgcpt"}
+KIND_LABEL = {"construction": "공사", "service": "용역", "goods": "물품", "foreign": "외자"}
 
 
 class Handler(StrEnum):
@@ -69,7 +70,7 @@ def _build() -> dict[str, OperationSpec]:
             OperationSpec(
                 key=f"notice_list_{ptype}",
                 source_name="g2b_bid_notice",
-                label=f"입찰공고 목록({ptype})",
+                label=f"{KIND_LABEL[ptype]} 입찰공고 목록",
                 base_url=BID_NOTICE_BASE,
                 operation=f"getBidPblancListInfo{sfx}",
                 handler=Handler.NOTICE,
@@ -80,7 +81,7 @@ def _build() -> dict[str, OperationSpec]:
             OperationSpec(
                 key=f"notice_search_{ptype}",
                 source_name="g2b_bid_notice",
-                label=f"입찰공고 검색({ptype})",
+                label=f"{KIND_LABEL[ptype]} 입찰공고 검색",
                 base_url=BID_NOTICE_BASE,
                 operation=f"getBidPblancListInfo{sfx}PPSSrch",
                 handler=Handler.NOTICE,
@@ -92,7 +93,7 @@ def _build() -> dict[str, OperationSpec]:
             OperationSpec(
                 key=f"award_{ptype}",
                 source_name="g2b_scsbid",
-                label=f"최종 낙찰자({ptype})",
+                label=f"{KIND_LABEL[ptype]} 최종 낙찰자",
                 base_url=SCSBID_BASE,
                 operation=f"getScsbidListSttus{sfx}",
                 handler=Handler.AWARD,
@@ -103,7 +104,7 @@ def _build() -> dict[str, OperationSpec]:
             OperationSpec(
                 key=f"opening_{ptype}",
                 source_name="g2b_scsbid",
-                label=f"개찰 결과 목록({ptype})",
+                label=f"{KIND_LABEL[ptype]} 개찰 결과 목록",
                 base_url=SCSBID_BASE,
                 operation=f"getOpengResultListInfo{sfx}",
                 handler=Handler.OPENING,
@@ -115,7 +116,7 @@ def _build() -> dict[str, OperationSpec]:
             OperationSpec(
                 key=f"prepar_{ptype}",
                 source_name="g2b_scsbid",
-                label=f"복수예비가격 상세({ptype})",
+                label=f"{KIND_LABEL[ptype]} 복수예비가격 상세",
                 base_url=SCSBID_BASE,
                 operation=f"getOpengResultListInfo{sfx}PreparPcDetail",
                 handler=Handler.PREPAR,
@@ -130,7 +131,7 @@ def _build() -> dict[str, OperationSpec]:
             OperationSpec(
                 key=f"basis_{ptype}",
                 source_name="g2b_bid_notice",
-                label=f"기초금액({ptype})",
+                label=f"{KIND_LABEL[ptype]} 기초금액",
                 base_url=BID_NOTICE_BASE,
                 operation=f"getBidPblancListInfo{sfx}BsisAmount",
                 handler=Handler.BASIS,
@@ -171,6 +172,12 @@ def _build() -> dict[str, OperationSpec]:
 
 
 OPERATIONS: dict[str, OperationSpec] = _build()
+_LABEL_BY_OPERATION = {(s.source_name, s.operation): s.label for s in OPERATIONS.values()}
+
+
+def operation_label(source_name: str, operation: str) -> str:
+    """수집 이력 표시용 한글 이름. 모르는 오퍼레이션이면 원래 이름을 돌려준다."""
+    return _LABEL_BY_OPERATION.get((source_name, operation), operation)
 
 # 공식 API 가 제공하지 않는 값은 채우지 않는다. 아래 맵에 없는 필드는 None 으로 둔다.
 # 값: (응답 필드명, 근거 수준)

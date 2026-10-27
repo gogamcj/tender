@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { get } from "../api/client";
 import type { Notice } from "../api/types";
 import { Badge, Empty, ErrorBox, Loading, Section, Stat } from "../components/ui";
-import { dt, label, won } from "../lib/format";
+import { dt, IMPORT_STATUS, ko, label, SOURCE_NAME, won } from "../lib/format";
 import { useAsync } from "../lib/useAsync";
 
 interface DashboardData {
@@ -12,7 +12,7 @@ interface DashboardData {
   favorites: number;
   rules: { total: number; unverified: number };
   pdf_unreviewed: number;
-  recent_collections: { id: number; source_name: string; operation: string; status: string; started_at: string; inserted: number; updated: number }[];
+  recent_collections: { id: number; source_name: string; operation: string; operation_label?: string; status: string; started_at: string; inserted: number; updated: number }[];
   recent_imports: { id: number; file_name: string; status: string; uploaded_at: string; rows: number; accepted: number }[];
   api_usage_today: { source_name: string; used: number; limit: number; protect_at: number }[];
   api_key_configured: boolean;
@@ -63,7 +63,7 @@ export default function Dashboard() {
           <ul className="space-y-1 text-sm">
             {data.api_usage_today.map((u) => (
               <li key={u.source_name}>
-                {u.source_name}: {u.used.toLocaleString()} / {u.limit.toLocaleString()}회
+                {ko(SOURCE_NAME, u.source_name)}: {u.used.toLocaleString()} / {u.limit.toLocaleString()}회
                 {u.used >= u.protect_at && <Badge tone="amber">한도 보호</Badge>}
               </li>
             ))}
@@ -73,7 +73,7 @@ export default function Dashboard() {
           {data.recent_collections.length === 0 ? <Empty>수집 이력이 없습니다.</Empty> : (
             <ul className="space-y-1 text-sm">
               {data.recent_collections.map((j) => (
-                <li key={j.id}>#{j.id} {j.operation} <Badge tone={j.status === "succeeded" ? "green" : j.status === "failed" ? "red" : "amber"}>{label(j.status)}</Badge> 추가 {j.inserted}·갱신 {j.updated}</li>
+                <li key={j.id}>#{j.id} {j.operation_label ?? j.operation} <Badge tone={j.status === "succeeded" ? "green" : j.status === "failed" ? "red" : "amber"}>{label(j.status)}</Badge> 추가 {j.inserted}·갱신 {j.updated}</li>
               ))}
             </ul>
           )}
@@ -82,7 +82,7 @@ export default function Dashboard() {
           {data.recent_imports.length === 0 ? <Empty>업로드 이력이 없습니다.</Empty> : (
             <ul className="space-y-1 text-sm">
               {data.recent_imports.map((j) => (
-                <li key={j.id}>#{j.id} {j.file_name} <Badge>{j.status}</Badge> {j.accepted}/{j.rows}행</li>
+                <li key={j.id}>#{j.id} {j.file_name} <Badge>{ko(IMPORT_STATUS, j.status)}</Badge> {j.accepted}/{j.rows}행</li>
               ))}
             </ul>
           )}
