@@ -51,8 +51,7 @@ def notice_summary(n: ProcurementNotice) -> dict:
     }
 
 
-@router.get("", summary="입찰공고 검색(금액·날짜·기관·공종 등)")
-def search(
+def search_params(
     q: str | None = Query(None, description="공고명·공고번호 검색어"),
     agency: str | None = None,
     industry: str | None = None,
@@ -71,49 +70,63 @@ def search(
     has_result: bool | None = None,
     latest_only: bool = True,
     sort: str = Query("-announcement_date", pattern="^-?(announcement_date|opening_date|base_amount|id)$"),
+) -> dict:
+    """검색 조건(목록 화면과 내보내기에서 같이 쓴다)."""
+    return dict(locals())
+
+
+def search_statement(p: dict):
+    stmt = select(ProcurementNotice)
+    if p["latest_only"]:
+        stmt = stmt.where(ProcurementNotice.is_latest_revision.is_(True))
+    if p["q"]:
+        like = f"%{p['q'].strip()}%"
+        stmt = stmt.where(or_(ProcurementNotice.title.ilike(like), ProcurementNotice.notice_number.ilike(like)))
+    if agency := p["agency"]:
+        stmt = stmt.where(or_(ProcurementNotice.agency_name.ilike(f"%{agency}%"), ProcurementNotice.demand_agency_name.ilike(f"%{agency}%")))
+    if p["industry"]:
+        stmt = stmt.where(ProcurementNotice.industry_name.ilike(f"%{p['industry']}%"))
+    if p["region"]:
+        stmt = stmt.where(ProcurementNotice.region_name.ilike(f"%{p['region']}%"))
+    for key in ("procurement_type", "issuing_authority_type", "award_method", "data_status", "phase"):
+        if p[key] is not None:
+            stmt = stmt.where(getattr(ProcurementNotice, key) == p[key])
+    amount = func.coalesce(ProcurementNotice.base_amount, ProcurementNotice.presumed_price)
+    if p["amount_min"] is not None:
+        stmt = stmt.where(amount >= p["amount_min"])
+    if p["amount_max"] is not None:
+        stmt = stmt.where(amount <= p["amount_max"])
+    if p["date_from"]:
+        stmt = stmt.where(ProcurementNotice.announcement_date >= p["date_from"])
+    if p["date_to"]:
+        stmt = stmt.where(ProcurementNotice.announcement_date <= p["date_to"])
+    if p["opening_from"]:
+        stmt = stmt.where(ProcurementNotice.opening_date >= datetime.combine(p["opening_from"], time(0), KST))
+    if p["opening_to"]:
+        stmt = stmt.where(ProcurementNotice.opening_date < datetime.combine(p["opening_to"] + timedelta(days=1), time(0), KST))
+    if p["has_result"] is not None:
+        exists = select(BidResult.id).where(BidResult.notice_id == ProcurementNotice.id).exists()
+        stmt = stmt.where(exists if p["has_result"] else ~exists)
+    return stmt
+
+
+def search_order(p: dict):
+    sort = p["sort"]
+    col = getattr(ProcurementNotice, sort.lstrip("-"))
+    return (col.desc().nulls_last() if sort.startswith("-") else col.asc().nulls_last()), ProcurementNotice.id.desc()
+
+
+@router.get("", summary="입찰공고 검색(금액·날짜·기관·공종 등)")
+def search(
+    params: dict = Depends(search_params),
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=200),
     session: Session = Depends(get_session),
 ) -> dict:
-    stmt = select(ProcurementNotice)
-    if latest_only:
-        stmt = stmt.where(ProcurementNotice.is_latest_revision.is_(True))
-    if q:
-        like = f"%{q.strip()}%"
-        stmt = stmt.where(or_(ProcurementNotice.title.ilike(like), ProcurementNotice.notice_number.ilike(like)))
-    if agency:
-        stmt = stmt.where(or_(ProcurementNotice.agency_name.ilike(f"%{agency}%"), ProcurementNotice.demand_agency_name.ilike(f"%{agency}%")))
-    if industry:
-        stmt = stmt.where(ProcurementNotice.industry_name.ilike(f"%{industry}%"))
-    if region:
-        stmt = stmt.where(ProcurementNotice.region_name.ilike(f"%{region}%"))
-    for value, col in ((procurement_type, ProcurementNotice.procurement_type),
-                       (issuing_authority_type, ProcurementNotice.issuing_authority_type),
-                       (award_method, ProcurementNotice.award_method), (data_status, ProcurementNotice.data_status),
-                       (phase, ProcurementNotice.phase)):
-        if value is not None:
-            stmt = stmt.where(col == value)
-    amount = func.coalesce(ProcurementNotice.base_amount, ProcurementNotice.presumed_price)
-    if amount_min is not None:
-        stmt = stmt.where(amount >= amount_min)
-    if amount_max is not None:
-        stmt = stmt.where(amount <= amount_max)
-    if date_from:
-        stmt = stmt.where(ProcurementNotice.announcement_date >= date_from)
-    if date_to:
-        stmt = stmt.where(ProcurementNotice.announcement_date <= date_to)
-    if opening_from:
-        stmt = stmt.where(ProcurementNotice.opening_date >= datetime.combine(opening_from, time(0), KST))
-    if opening_to:
-        stmt = stmt.where(ProcurementNotice.opening_date < datetime.combine(opening_to + timedelta(days=1), time(0), KST))
-    if has_result is not None:
-        exists = select(BidResult.id).where(BidResult.notice_id == ProcurementNotice.id).exists()
-        stmt = stmt.where(exists if has_result else ~exists)
+    stmt = search_statement(params)
     total = session.scalar(select(func.count()).select_from(stmt.subquery()))
-    col = getattr(ProcurementNotice, sort.lstrip("-"))
-    order = col.desc().nulls_last() if sort.startswith("-") else col.asc().nulls_last()
     rows = session.scalars(
-        stmt.options(selectinload(ProcurementNotice.results)).order_by(order, ProcurementNotice.id.desc())
+        stmt.options(selectinload(ProcurementNotice.results)).order_by(*search_order(params))
         .offset((page - 1) * size).limit(size)
     )
     return {"total": total, "page": page, "size": size, "items": [notice_summary(n) for n in rows]}

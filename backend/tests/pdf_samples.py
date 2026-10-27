@@ -7,10 +7,10 @@ import io
 from reportlab import rl_config
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-from reportlab.lib.styles import ParagraphStyle
 
 FONT = "HYSMyeongJo-Medium"
 rl_config.invariant = 1  # 같은 내용이면 같은 바이트(생성 시각·문서 ID 고정)

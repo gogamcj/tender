@@ -8,10 +8,17 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.api.deps import require_admin
 from app.core.config import get_settings
 from app.db.models import BidRule
 from app.db.session import get_session
-from app.engines.rules import NoticeContext, RuleDefinition, VerificationStatus, evaluate_rule, select_rules
+from app.engines.rules import (
+    NoticeContext,
+    RuleDefinition,
+    VerificationStatus,
+    evaluate_rule,
+    select_rules,
+)
 from app.services import rules as rule_service
 
 router = APIRouter(prefix="/api/rules", tags=["규칙 관리"])
@@ -26,7 +33,7 @@ def get_rules(session: Session = Depends(get_session)) -> list[dict]:
     return [_out(r) for r in rule_service.list_rules(session)]
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, dependencies=[Depends(require_admin)])
 def post_rule(rule: RuleDefinition, session: Session = Depends(get_session)) -> dict:
     row = rule_service.create_rule(session, rule)
     session.commit()
@@ -37,7 +44,7 @@ class VerificationIn(BaseModel):
     verification_status: VerificationStatus
 
 
-@router.patch("/{rule_id}/verification")
+@router.patch("/{rule_id}/verification", dependencies=[Depends(require_admin)])
 def patch_verification(rule_id: int, body: VerificationIn, session: Session = Depends(get_session)) -> dict:
     row = session.get(BidRule, rule_id)
     if row is None:

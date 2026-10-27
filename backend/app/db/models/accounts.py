@@ -23,6 +23,19 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
 
 
+class UserSession(Base):
+    """로그인 세션. 토큰 원문은 저장하지 않고 SHA-256 해시만 저장한다."""
+
+    __tablename__ = "user_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(TZDateTime())
+    revoked: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
 class CompanyProfile(Base):
     __tablename__ = "company_profiles"
 

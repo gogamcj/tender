@@ -18,6 +18,7 @@ python3 -m venv ../.venv && . ../.venv/bin/activate
 pip install -e ".[dev]"
 cp ../.env.example .env          # 필요 시 값 수정
 alembic upgrade head             # DB 스키마 생성
+python -m app.cli create-user admin --role admin   # 첫 관리자(비밀번호는 입력 프롬프트로)
 uvicorn app.main:app --reload    # http://127.0.0.1:8000/docs 에서 API 문서 확인
 pytest                           # 테스트
 ```

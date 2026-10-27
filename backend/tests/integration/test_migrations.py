@@ -3,13 +3,13 @@
 import os
 
 import pytest
-from alembic import command
+from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
-from alembic.autogenerate import compare_metadata
 from sqlalchemy import text
 
 import app.db.models  # noqa: F401
+from alembic import command
 from app.db.base import Base
 from app.db.session import make_engine
 from tests.conftest import BACKEND_DIR, _reset_pg

@@ -1,10 +1,25 @@
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 
-from app.api import analysis, calc, collections, imports, notices, pdfs, recommend, rules, runs
+from app.api import (
+    analysis,
+    auth,
+    calc,
+    collections,
+    imports,
+    notices,
+    pdfs,
+    recommend,
+    reports,
+    reserve,
+    rules,
+    runs,
+    workspace,
+)
+from app.api.deps import require_access
 from app.core.config import get_settings
 from app.engines.calc import CalcInputError
 from app.engines.rules import RuleBlockedError
@@ -42,15 +57,11 @@ def create_app() -> FastAPI:
     def health() -> dict:
         return {"status": "ok"}
 
-    app.include_router(calc.router)
-    app.include_router(rules.router)
-    app.include_router(imports.router)
-    app.include_router(collections.router)
-    app.include_router(notices.router)
-    app.include_router(analysis.router)
-    app.include_router(recommend.router)
-    app.include_router(runs.router)
-    app.include_router(pdfs.router)
+    app.include_router(auth.router)
+    app.include_router(auth.users_router)
+    protected = [Depends(require_access)]
+    for module in (calc, rules, imports, collections, notices, analysis, recommend, runs, pdfs, workspace, reserve, reports):
+        app.include_router(module.router, dependencies=protected)
     return app
 
 

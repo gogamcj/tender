@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     api_daily_limits: dict[str, int] = {}
     # 업로드 원본 파일·PDF 보관 위치
     storage_dir: str = "./storage"
+    # 로그인 세션
+    session_hours: int = 12
+    cookie_secure: bool = False  # HTTPS 로 운영할 때 반드시 true
+    login_max_failures: int = 5  # 이 횟수만큼 연속 실패하면
+    login_lockout_minutes: int = 15  # 이 시간 동안 로그인 거부
 
 
 @lru_cache

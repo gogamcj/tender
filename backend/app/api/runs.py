@@ -10,7 +10,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import AnalysisRun, BidScenario
+from app.api.deps import current_user
+from app.db.models import AnalysisRun, BidScenario, User
 from app.db.session import get_session
 
 from . import analysis as analysis_api
@@ -58,7 +59,7 @@ def _strip(d: dict) -> dict:
 
 
 @router.post("/{run_id}/reproduce", summary="저장된 입력으로 다시 계산해 결과 비교")
-def reproduce(run_id: int, session: Session = Depends(get_session)) -> dict:
+def reproduce(run_id: int, session: Session = Depends(get_session), user: User = Depends(current_user)) -> dict:
     run = session.get(AnalysisRun, run_id)
     if run is None:
         raise HTTPException(404, "분석 실행 기록이 없습니다.")
@@ -68,7 +69,7 @@ def reproduce(run_id: int, session: Session = Depends(get_session)) -> dict:
     elif run.analysis_type == "similar":
         current = analysis_api.similar(analysis_api.SimilarIn.model_validate(snap), session)
     elif run.analysis_type == "recommend":
-        current, _ = recommend_api.run_recommend(recommend_api.RecommendIn.model_validate(snap), session)
+        current, _ = recommend_api.run_recommend(recommend_api.RecommendIn.model_validate(snap), session, user)
     else:
         raise HTTPException(400, f"재현을 지원하지 않는 분석 종류입니다: {run.analysis_type}")
     data_changed = current.get("dataset_version") != run.dataset_version

@@ -130,3 +130,20 @@ def post_vat(body: VatIn) -> dict:
         stated_vat_amount=body.stated_vat_amount,
         rounding=_r(body.rounding),
     ).to_dict()
+
+
+class ReserveAverageIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    selected_prices: list[Num]
+    base_amount: Num | None = None
+    price_status: PriceStatus = PriceStatus.SCENARIO
+    rounding: RoundingIn | None = None
+
+
+@router.post("/reserve-average", summary="예정가격 = 추첨된 예비가격의 산술평균(기초금액을 주면 사정률도)")
+def post_reserve_average(body: ReserveAverageIn) -> dict:
+    est = calc.estimated_price_from_reserve_prices(body.selected_prices, rounding=_r(body.rounding), price_status=body.price_status)
+    out = est.to_dict()
+    if body.base_amount is not None:
+        out["sajeong"] = calc.sajeong_rate(body.base_amount, est.value, price_status=body.price_status).to_dict()
+    return out

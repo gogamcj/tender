@@ -224,3 +224,41 @@ curl -F file=@seed/sample_notice.pdf -F notice_id=1 localhost:8000/api/pdfs
 
 ### 다음 단계
 7단계: React + TypeScript 웹 화면(17개 메뉴), 차트, Vitest·Playwright
+
+## 7단계 — 로그인·권한, 원가 접근 제한, 관심 공고, 대시보드, 복수예비가격, 보고서 (2026-10-27)
+
+계획 변경: 화면(React)이 로그인·대시보드·보고서 API 에 의존하므로 원래 8단계에 있던 인증·보고서를 먼저 만들었습니다. 화면은 8단계, Docker·백업·설치 검증은 9단계입니다.
+
+### 생성·수정한 파일
+- 생성: `app/core/security.py`(Argon2id·토큰), `app/services/auth.py`, `app/api/{auth,deps,workspace,reserve,reports}.py`, `app/reports/writer.py`, `alembic/versions/0004_auth_sessions.py`
+- 생성: `tests/integration/{test_auth,test_workspace_reports}.py`
+- 수정: `app/main.py`(모든 /api 경로 로그인 필요), `app/api/{rules,collections}.py`(관리자 전용), `app/api/recommend.py`(원가 소유자 검사), `app/api/notices.py`(검색 조건 공용화), `app/api/runs.py`, `app/api/calc.py`, `app/engines/calc/formulas.py`(예비가격 평균), `app/db/models/accounts.py`, `app/db/enums.py`(조회 전용 역할), `app/cli.py`(create-user), `app/core/config.py`, `.env.example`, `tests/conftest.py`(역할별 로그인 클라이언트)
+
+### 구현한 기능
+- 로그인·로그아웃·내 정보·비밀번호 변경, Argon2id 해시, 세션 토큰은 해시만 저장, 연속 실패 잠금, 비밀번호 규칙, 비밀번호 변경·계정 비활성화 시 세션 종료
+- 역할: 관리자(사용자 관리·규칙 등록/검증·수집 실행·모든 원가), 일반, 조회 전용(변경 불가·원가 열람 불가). 첫 관리자는 명령줄로 생성(비밀번호는 프롬프트·환경변수로만)
+- 원가 자료: 작성자·관리자만 조회·수정·평가·보고서, 남의 원가는 존재 여부도 알리지 않음(404)
+- 대시보드 API(마감 임박 공고, 검토 필요 건수, 보류 변경, 미검증 규칙, PDF 미검토, 최근 수집·업로드, 오늘 API 사용량)
+- 관심 공고(메모), 저장한 검색 조건(사용자별)
+- 복수예비가격: 예정가격 = 추첨 예비가격 평균 계산, 공고별 예비가격·기초금액 대비 비율·추첨 여부·평균과 예정가격 대조, 여러 공고의 비율 분포·번호별 추첨 횟수(조건·예비가격 범위별)
+- 보고서 XLSX·CSV: 공고 목록(검색 조건 그대로), 저장된 분석(개찰 결과 분석·유사 입찰·투찰 시나리오), 원가·수익성(투찰금액별 손익), 계산 규칙 요약. 모든 보고서에 생성일시·기준일/기간·데이터 버전·산식·적용 규칙·추정값 여부. 수식 주입 방지
+
+### 실행 방법
+```
+cd backend && alembic upgrade head && python -m app.cli create-user admin --role admin
+uvicorn app.main:app --reload
+curl -c ck -X POST localhost:8000/api/auth/login -H 'Content-Type: application/json' -d '{"username":"admin","password":"..."}'
+curl -b ck -o notices.xlsx 'localhost:8000/api/reports/notices.xlsx?agency=샘플시청'
+```
+
+### 실행한 테스트와 결과
+- `pytest` 전체(SQLite + PostgreSQL 16): **358 passed**
+  - 이번 단계 추가: 인증·권한 21개(10개 × 2 DB + 명령줄 1), 대시보드·관심 공고·저장 조건·예비가격·보고서 18개(9개 × 2 DB). 기존 테스트는 모두 로그인한 관리자 클라이언트로 다시 통과
+- 마이그레이션 0001→0004 왕복, 모델-스키마 차이 없음
+
+### 확인하지 못한 항목
+- 실제 수집한 복수예비가격 자료로 분석 확인
+- HTTPS 환경에서 보안 쿠키 동작(9단계 Docker 구성에서 안내)
+
+### 다음 단계
+8단계: React + TypeScript 화면 17개 메뉴, 차트, Vitest·Playwright

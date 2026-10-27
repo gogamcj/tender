@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.api.deps import require_admin
 from app.connectors.specs import NOTICE_FIELD_MAP, OPERATIONS, QueryMode
 from app.core.config import get_settings
 from app.db.models import DataCollectionJob
@@ -57,7 +58,7 @@ class CollectIn(BaseModel):
     max_pages: int = Field(50, ge=1, le=500)
 
 
-@router.post("", status_code=202, summary="수집 작업 시작(백그라운드)")
+@router.post("", status_code=202, dependencies=[Depends(require_admin)], summary="수집 작업 시작(백그라운드)")
 def start(
     body: CollectIn,
     background: BackgroundTasks,

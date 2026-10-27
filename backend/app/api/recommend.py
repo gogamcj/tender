@@ -13,8 +13,16 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.db.enums import ScoreStatus
-from app.db.models import AnalysisRun, BidScenario, CompanyCost, ProcurementNotice, QualificationCheck
+from app.api.deps import can_read_cost, current_user
+from app.db.enums import ScoreStatus, UserRole
+from app.db.models import (
+    AnalysisRun,
+    BidScenario,
+    CompanyCost,
+    ProcurementNotice,
+    QualificationCheck,
+    User,
+)
 from app.db.session import get_session
 from app.engines.calc import CalcInputError, RateBasis
 from app.engines.recommend import (
@@ -32,7 +40,12 @@ from app.engines.recommend import (
     evaluate_profit,
 )
 from app.services.analysis import dataset_version
-from app.services.recommend import LowerLimitOverride, cost_sheet_from_row, history_for, resolve_lower_limit
+from app.services.recommend import (
+    LowerLimitOverride,
+    cost_sheet_from_row,
+    history_for,
+    resolve_lower_limit,
+)
 
 router = APIRouter(tags=["투찰 시나리오·원가·적격심사"])
 
@@ -85,7 +98,7 @@ class RecommendIn(BaseModel):
     save: bool = False
 
 
-def run_recommend(body: RecommendIn, session: Session) -> tuple[dict, list]:
+def run_recommend(body: RecommendIn, session: Session, user: User) -> tuple[dict, list]:
     n = session.get(ProcurementNotice, body.notice_id)
     if n is None:
         raise HTTPException(404, "공고가 없습니다.")
@@ -105,10 +118,7 @@ def run_recommend(body: RecommendIn, session: Session) -> tuple[dict, list]:
         raise HTTPException(400, str(e)) from e
     sheet = None
     if body.cost_id is not None:
-        row = session.get(CompanyCost, body.cost_id)
-        if row is None:
-            raise HTTPException(404, "원가 자료가 없습니다.")
-        sheet = cost_sheet_from_row(row)
+        sheet = cost_sheet_from_row(_cost_row(session, body.cost_id, user))
     elif body.cost is not None:
         sheet = body.cost.sheet()
     vat = body.bid_vat_included if body.bid_vat_included is not None else n.vat_included
@@ -132,12 +142,12 @@ def run_recommend(body: RecommendIn, session: Session) -> tuple[dict, list]:
 
 
 @router.post("/api/recommend", summary="투찰 시나리오(보수·중립·공격·사용자 정의) 계산")
-def recommend(body: RecommendIn, session: Session = Depends(get_session)) -> dict:
-    result, _ = run_recommend(body, session)
+def recommend(body: RecommendIn, session: Session = Depends(get_session), user: User = Depends(current_user)) -> dict:
+    result, _ = run_recommend(body, session, user)
     if body.save:
         spec = result["lower_limit"]
         run = AnalysisRun(
-            notice_id=body.notice_id, analysis_type="recommend", input_snapshot=body.model_dump(mode="json"),
+            notice_id=body.notice_id, created_by=user.id, analysis_type="recommend", input_snapshot=body.model_dump(mode="json"),
             rule_version={spec["rule_code"]: spec["rule_version"]} if spec["rule_code"] else None,
             dataset_version=result["dataset_version"], assumptions=result["warnings"], result_summary=result,
             confidence_status=result["status"],
@@ -172,30 +182,45 @@ def _cost_out(row: CompanyCost) -> dict:
             "summary": cost_summary(sheet), "updated_at": row.updated_at.isoformat() if row.updated_at else None}
 
 
-@router.post("/api/costs", status_code=201, summary="원가 자료 등록(민감 자료)")
-def create_cost(body: CostIn, session: Session = Depends(get_session)) -> dict:
+def _cost_row(session: Session, cost_id: int, user: User) -> CompanyCost:
+    """작성자·관리자가 아니면 자료가 있는지도 알리지 않는다(404)."""
+    row = session.get(CompanyCost, cost_id)
+    if row is None or not can_read_cost(user, row.owner_user_id):
+        raise HTTPException(404, "원가 자료가 없습니다.")
+    return row
+
+
+@router.get("/api/costs", summary="내 원가 자료 목록(관리자는 전체)")
+def list_costs(notice_id: int | None = None, session: Session = Depends(get_session), user: User = Depends(current_user)) -> list[dict]:
+    if user.role is UserRole.VIEWER:
+        raise HTTPException(403, "조회 전용 계정은 원가 자료를 볼 수 없습니다.")
+    q = select(CompanyCost).order_by(CompanyCost.id.desc())
+    if user.role is not UserRole.ADMIN:
+        q = q.where(CompanyCost.owner_user_id == user.id)
+    if notice_id is not None:
+        q = q.where(CompanyCost.notice_id == notice_id)
+    return [_cost_out(r) for r in session.scalars(q)]
+
+
+@router.post("/api/costs", status_code=201, summary="원가 자료 등록(민감 자료: 작성자·관리자만 열람)")
+def create_cost(body: CostIn, session: Session = Depends(get_session), user: User = Depends(current_user)) -> dict:
     body.sheet()
     if body.notice_id is not None and session.get(ProcurementNotice, body.notice_id) is None:
         raise HTTPException(404, "공고가 없습니다.")
-    row = CompanyCost(**body.model_dump())
+    row = CompanyCost(**body.model_dump(), owner_user_id=user.id)
     session.add(row)
     session.commit()
     return _cost_out(row)
 
 
 @router.get("/api/costs/{cost_id}")
-def get_cost(cost_id: int, session: Session = Depends(get_session)) -> dict:
-    row = session.get(CompanyCost, cost_id)
-    if row is None:
-        raise HTTPException(404, "원가 자료가 없습니다.")
-    return _cost_out(row)
+def get_cost(cost_id: int, session: Session = Depends(get_session), user: User = Depends(current_user)) -> dict:
+    return _cost_out(_cost_row(session, cost_id, user))
 
 
 @router.put("/api/costs/{cost_id}", summary="원가 자료 수정(전체 교체)")
-def update_cost(cost_id: int, body: CostIn, session: Session = Depends(get_session)) -> dict:
-    row = session.get(CompanyCost, cost_id)
-    if row is None:
-        raise HTTPException(404, "원가 자료가 없습니다.")
+def update_cost(cost_id: int, body: CostIn, session: Session = Depends(get_session), user: User = Depends(current_user)) -> dict:
+    row = _cost_row(session, cost_id, user)
     body.sheet()
     for k, v in body.model_dump().items():
         setattr(row, k, v)
@@ -211,12 +236,9 @@ class CostEvalIn(BaseModel):
 
 
 @router.post("/api/costs/evaluate", summary="투찰금액별 이익·이익률, 손익분기 금액")
-def evaluate_cost(body: CostEvalIn, session: Session = Depends(get_session)) -> dict:
+def evaluate_cost(body: CostEvalIn, session: Session = Depends(get_session), user: User = Depends(current_user)) -> dict:
     if body.cost_id is not None:
-        row = session.get(CompanyCost, body.cost_id)
-        if row is None:
-            raise HTTPException(404, "원가 자료가 없습니다.")
-        sheet = cost_sheet_from_row(row)
+        sheet = cost_sheet_from_row(_cost_row(session, body.cost_id, user))
     elif body.cost is not None:
         sheet = body.cost.sheet()
     else:
@@ -276,13 +298,13 @@ def get_qualification(notice_id: int, pass_threshold: Decimal | None = None, ses
 
 
 @router.put("/api/notices/{notice_id}/qualification", summary="공고별 적격심사 점검표 저장(전체 교체)")
-def put_qualification(notice_id: int, body: QualIn, session: Session = Depends(get_session)) -> dict:
+def put_qualification(notice_id: int, body: QualIn, session: Session = Depends(get_session), user: User = Depends(current_user)) -> dict:
     if session.get(ProcurementNotice, notice_id) is None:
         raise HTTPException(404, "공고가 없습니다.")
     items = [QualItem(**i.model_dump()) for i in body.items]
     evaluate_items(items, pass_threshold=body.pass_threshold)  # 저장 전에 검증
     session.execute(delete(QualificationCheck).where(QualificationCheck.notice_id == notice_id))
-    rows = [QualificationCheck(notice_id=notice_id, item_code=i.item_code, item_name=i.item_name, max_score=i.max_score,
+    rows = [QualificationCheck(notice_id=notice_id, owner_user_id=user.id, item_code=i.item_code, item_name=i.item_name, max_score=i.max_score,
                                score=i.score, score_status=ScoreStatus(i.status), basis=i.basis, source_reference=i.source_reference)
             for i in items]
     session.add_all(rows)

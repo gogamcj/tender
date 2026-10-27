@@ -119,6 +119,30 @@ def cmd_probe(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_create_user(a: argparse.Namespace) -> int:
+    """사용자 생성. 비밀번호는 환경변수(BID_NEW_USER_PASSWORD) 또는 입력 프롬프트로만 받는다(명령행 인자 금지)."""
+    import getpass
+    import os
+
+    from app.core.security import WeakPassword
+    from app.db.enums import UserRole
+    from app.services.auth import create_user
+
+    password = os.environ.get("BID_NEW_USER_PASSWORD") or getpass.getpass("비밀번호: ")
+    if not os.environ.get("BID_NEW_USER_PASSWORD") and getpass.getpass("비밀번호 확인: ") != password:
+        print("비밀번호가 서로 다릅니다.", file=sys.stderr)
+        return 2
+    with get_session_factory()() as session:
+        try:
+            user = create_user(session, a.username, password, UserRole(a.role))
+        except (WeakPassword, ValueError) as e:
+            print(str(e), file=sys.stderr)
+            return 2
+        session.commit()
+        print(f"사용자 생성: {user.username} ({user.role.value})")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="python -m app.cli")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -138,6 +162,10 @@ def main(argv: list[str] | None = None) -> int:
     pr.add_argument("--days", type=int, default=3)
     pr.add_argument("--out")
     pr.set_defaults(fn=cmd_probe)
+    u = sub.add_parser("create-user", help="사용자 생성(첫 관리자 만들기)")
+    u.add_argument("username")
+    u.add_argument("--role", default="user", choices=["admin", "user", "viewer"])
+    u.set_defaults(fn=cmd_create_user)
     a = p.parse_args(argv)
     return a.fn(a)
 

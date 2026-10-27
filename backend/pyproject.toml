@@ -33,3 +33,10 @@ include = ["app*"]
 testpaths = ["tests"]
 addopts = "-q"
 filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`", "ignore:ast.NameConstant is deprecated:DeprecationWarning"]
+
+[tool.ruff]
+line-length = 140
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E9", "F", "I"]

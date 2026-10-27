@@ -3,11 +3,11 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from alembic import command
 from alembic.config import Config
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from alembic import command
 from app.db.session import make_engine
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -51,23 +51,54 @@ def session(engine) -> Iterator[Session]:
         yield s
 
 
+TEST_PASSWORD = "test-pass-2026!"
+
+
 @pytest.fixture
-def client(engine):
+def make_client(engine):
+    """역할별로 로그인된 TestClient 를 만든다. make_client("user", "kim")"""
+    from contextlib import ExitStack
+
     from fastapi.testclient import TestClient
 
+    from app.db.enums import UserRole
     from app.db.session import get_session
     from app.main import create_app
+    from app.services.auth import create_user
 
-    app = create_app()
     factory = sessionmaker(bind=engine, expire_on_commit=False)
 
     def _override() -> Iterator[Session]:
         with factory() as s:
             yield s
 
-    app.dependency_overrides[get_session] = _override
-    with TestClient(app) as c:
-        yield c
+    stack = ExitStack()
+
+    def make(role: str = "admin", username: str | None = None, *, login: bool = True):
+        app = create_app()
+        app.dependency_overrides[get_session] = _override
+        c = stack.enter_context(TestClient(app))
+        if login:
+            name = username or f"{role}-user"
+            with factory() as s:
+                from sqlalchemy import select
+
+                from app.db.models import User
+
+                if s.scalar(select(User).where(User.username == name)) is None:
+                    create_user(s, name, TEST_PASSWORD, UserRole(role))
+                    s.commit()
+            r = c.post("/api/auth/login", json={"username": name, "password": TEST_PASSWORD})
+            assert r.status_code == 200, r.text
+        return c
+
+    yield make
+    stack.close()
+
+
+@pytest.fixture
+def client(make_client):
+    return make_client("admin")
 
 
 @pytest.fixture(autouse=True)

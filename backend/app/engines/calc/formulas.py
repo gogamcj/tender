@@ -146,6 +146,35 @@ def estimated_price_from_sajeong(
     )
 
 
+def estimated_price_from_reserve_prices(
+    selected_prices: list[object],
+    *,
+    rounding: RoundingRule | None = None,
+    price_status: PriceStatus = PriceStatus.SCENARIO,
+) -> CalcResult:
+    """예정가격 = 추첨된 예비가격들의 산술평균.
+
+    추첨 개수와 단수처리는 공고·적용 규정에서 확인해야 한다. 여기서는 개수를 강제하지 않고 입력된 값의 평균만 낸다.
+    """
+    if not selected_prices:
+        raise CalcInputError("selected_prices", "추첨된 예비가격을 하나 이상 입력하세요.")
+    values = [require_positive(to_decimal(v, f"selected_prices[{i}]"), f"selected_prices[{i}]") for i, v in enumerate(selected_prices)]
+    raw = sum(values, Decimal(0)) / len(values)
+    value, warnings = apply_rounding(raw, rounding)
+    if price_status is not PriceStatus.ACTUAL:
+        warnings.append(f"ASSUMPTION_BASED: 실제 추첨 결과가 아닌 가정 선택이므로 {ASSUMPTION_LABEL} 결과입니다.")
+    return CalcResult(
+        name="estimated_price_from_reserve",
+        value=value,
+        unit="KRW",
+        formula="추첨된 예비가격의 산술평균",
+        inputs={"selected_prices": [str(v) for v in values], "count": len(values), "rounding": rounding.to_dict() if rounding else None},
+        price_status=price_status,
+        warnings=tuple(warnings),
+        extra={"unrounded": str(raw)},
+    )
+
+
 def lower_limit_amount(
     reference_price: object,
     lower_limit_rate: object,

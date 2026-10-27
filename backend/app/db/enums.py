@@ -99,8 +99,9 @@ class LinkSource(StrEnum):
 
 
 class UserRole(StrEnum):
-    ADMIN = "admin"
-    USER = "user"
+    ADMIN = "admin"  # 사용자 관리, 규칙 검증, 수집 실행, 모든 원가 열람
+    USER = "user"  # 분석·업로드·본인 원가
+    VIEWER = "viewer"  # 조회만(원가 열람 불가)
 
 
 LABELS: dict[str, str] = {
