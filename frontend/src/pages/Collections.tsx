@@ -7,7 +7,23 @@ import { useAsync } from "../lib/useAsync";
 
 interface Op { key: string; label: string; source_name: string; operation: string; procurement_type: string | null; evidence: string; date_types: string[]; by_notice_number: boolean; max_window_days: number; search_params: string[] }
 interface Sources { service_key_configured: boolean; usage_today: { source_name: string; date: string; used: number; limit: number; protect_at: number }[]; operations: Op[] }
-interface Job { id: number; source_name: string; operation: string; query_parameters: Record<string, unknown>; status: string; started_at: string; finished_at: string | null; request_count: number; inserted_count: number; updated_count: number; skipped_count: number; error_summary: string | null }
+interface Job { id: number; source_name: string; operation: string; query_parameters: Record<string, unknown>; status: string; started_at: string; finished_at: string | null; request_count: number; inserted_count: number; updated_count: number; skipped_count: number; error_summary: JobSummary | null }
+// 서버는 수집 결과 요약을 객체로 준다(성공해도 returned_items·warnings 가 있음).
+export interface JobSummary { returned_items?: number; warnings?: string[]; request_errors?: string[]; error?: string; error_code?: string }
+
+export function JobSummaryCell({ s }: { s: JobSummary | null }) {
+  if (!s) return null;
+  const warnings = s.warnings ?? [];
+  return (
+    <div className="space-y-0.5">
+      {s.returned_items !== undefined && <div>응답 {s.returned_items}건</div>}
+      {s.error && <div className="text-red-700">{s.error}{s.error_code ? ` (${s.error_code})` : ""}</div>}
+      {(s.request_errors ?? []).slice(-3).map((e, i) => <div key={i} className="text-amber-700">{String(e)}</div>)}
+      {warnings.slice(0, 3).map((w, i) => <div key={i} className="text-slate-600">{String(w)}</div>)}
+      {warnings.length > 3 && <div className="text-slate-500">외 경고 {warnings.length - 3}건</div>}
+    </div>
+  );
+}
 
 const DATE_TYPE: Record<string, string> = { posted: "공고일", opening: "개찰일" };
 const STATUS_TONE: Record<string, "green" | "amber" | "red" | "blue"> = { succeeded: "green", partial: "amber", failed: "red", quota_stopped: "amber", running: "blue" };
@@ -96,13 +112,13 @@ export default function Collections() {
         {jobs.loading ? <Loading /> : (jobs.data ?? []).length === 0 ? <Empty>수집 이력이 없습니다.</Empty> : (
           <div className="table-wrap">
             <table className="tbl">
-              <thead><tr><th>#</th><th>오퍼레이션</th><th>상태</th><th>시작</th><th>종료</th><th>호출</th><th>추가</th><th>갱신</th><th>건너뜀</th><th>오류</th></tr></thead>
+              <thead><tr><th>#</th><th>오퍼레이션</th><th>상태</th><th>시작</th><th>종료</th><th>호출</th><th>추가</th><th>갱신</th><th>건너뜀</th><th>결과·오류</th></tr></thead>
               <tbody>
                 {jobs.data!.map((j) => (
                   <tr key={j.id}>
                     <td>{j.id}</td><td>{j.operation}</td><td><Badge tone={STATUS_TONE[j.status]}>{label(j.status)}</Badge></td>
                     <td>{dt(j.started_at)}</td><td>{dt(j.finished_at)}</td><td>{j.request_count}</td><td>{j.inserted_count}</td><td>{j.updated_count}</td><td>{j.skipped_count}</td>
-                    <td className="max-w-xs whitespace-normal text-xs">{j.error_summary ?? ""}</td>
+                    <td className="max-w-md whitespace-normal text-xs"><JobSummaryCell s={j.error_summary} /></td>
                   </tr>
                 ))}
               </tbody>

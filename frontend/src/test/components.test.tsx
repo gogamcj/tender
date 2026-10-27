@@ -84,3 +84,33 @@ describe("로그인과 화면 전환", () => {
     expect((await screen.findAllByRole("alert"))[0]).toHaveTextContent("서버 오류가 발생했습니다(500)");
   });
 });
+
+describe("데이터 수집 관리", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("수집 결과 요약(객체)을 표시하고 화면이 깨지지 않는다", async () => {
+    const job = {
+      id: 1, source_name: "g2b_scsbid", operation: "getOpengResultListInfoServc", query_parameters: {}, status: "failed",
+      started_at: "2026-10-27T00:00:00+00:00", finished_at: "2026-10-27T00:00:05+00:00", request_count: 1, inserted_count: 0, updated_count: 0, skipped_count: 0,
+      error_summary: { returned_items: 0, warnings: [], request_errors: ["SERVICE_KEY_IS_NOT_REGISTERED_ERROR"], error: "인증키 오류", error_code: "30" },
+    };
+    mockFetch((url) => {
+      if (url.endsWith("/api/auth/me")) return [200, { id: 1, username: "a", role: "admin", is_active: true }];
+      if (url.endsWith("/api/collections/sources")) return [200, { service_key_configured: true, usage_today: [], operations: [] }];
+      if (url.endsWith("/api/collections")) return [200, [job]];
+      return [200, []];
+    });
+    app("/collections");
+    expect(await screen.findByText("인증키 오류 (30)")).toBeInTheDocument();
+    expect(screen.getByText("SERVICE_KEY_IS_NOT_REGISTERED_ERROR")).toBeInTheDocument();
+    expect(screen.getByText("응답 0건")).toBeInTheDocument();
+  });
+
+  it("화면 오류가 나도 빈 화면 대신 안내한다", async () => {
+    const { ErrorBoundary } = await import("../components/ErrorBoundary");
+    const Boom = () => { throw new Error("boom"); };
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    render(<ErrorBoundary><Boom /></ErrorBoundary>);
+    expect(screen.getByRole("alert")).toHaveTextContent("이 화면을 표시하는 중 오류가 났습니다");
+  });
+});

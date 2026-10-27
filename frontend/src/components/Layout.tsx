@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { label } from "../lib/format";
 
 export const MENUS: { path: string; title: string }[] = [
@@ -26,6 +27,7 @@ export const MENUS: { path: string; title: string }[] = [
 export function Layout() {
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
+  const { pathname } = useLocation();
   return (
     <div className="min-h-screen md:flex">
       <header className="flex items-center justify-between bg-slate-900 px-4 py-2 text-white md:hidden">
@@ -65,7 +67,9 @@ export function Layout() {
         </div>
       </nav>
       <main className="min-w-0 flex-1 p-3 md:p-6">
-        <Outlet />
+        <ErrorBoundary resetKey={pathname}>
+          <Outlet />
+        </ErrorBoundary>
         <footer className="mt-8 text-xs text-slate-500">
           이 시스템은 분석·의사결정 지원용입니다. 낙찰을 보장하지 않으며 투찰을 대신 제출하지 않습니다.
         </footer>
