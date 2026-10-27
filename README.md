@@ -19,7 +19,7 @@ docker compose exec backend python -m app.cli create-user admin --role admin
 # http://localhost:8080
 ```
 
-자세한 내용: [설치 매뉴얼](docs/install.md), [API 인증 안내](docs/api-auth-guide.md), [엑셀 업로드 안내](docs/upload-guide.md), [백업·복원](docs/backup-restore.md), [카페24 등 리눅스 서버 배포](docs/deploy-cafe24.md), [알려진 제한사항](docs/known-limitations.md)
+자세한 내용: [설치 매뉴얼](docs/install.md), [API 인증 안내](docs/api-auth-guide.md), [엑셀 업로드 안내](docs/upload-guide.md), [백업·복원](docs/backup-restore.md), [내 PC 에서 실행(쉬운 안내)](docs/run-on-pc.md), [카페24 등 리눅스 서버 배포](docs/deploy-cafe24.md), [알려진 제한사항](docs/known-limitations.md)
 
 ## 빠른 시작 (개발, 백엔드 SQLite)
 
