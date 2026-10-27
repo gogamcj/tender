@@ -38,3 +38,9 @@ def get_session() -> Iterator[Session]:
     assert _SessionLocal is not None
     with _SessionLocal() as session:
         yield session
+
+
+def get_session_factory() -> sessionmaker[Session]:
+    get_engine()
+    assert _SessionLocal is not None
+    return _SessionLocal

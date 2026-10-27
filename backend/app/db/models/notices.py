@@ -59,6 +59,9 @@ class ProcurementNotice(Base):
     vat_amount: Mapped[Decimal | None] = mapped_column(Money)
     vat_included: Mapped[bool | None] = mapped_column(Boolean)
     lower_limit_rate: Mapped[Decimal | None] = mapped_column(Rate)  # 공고에 기재된 낙찰하한율(%)
+    # 복수예비가격 범위(기초금액 대비 %, 공식 데이터·공고문에서 확인된 경우에만)
+    reserve_range_begin_rate: Mapped[Decimal | None] = mapped_column(Rate)
+    reserve_range_end_rate: Mapped[Decimal | None] = mapped_column(Rate)
     notice_url: Mapped[str | None] = mapped_column(String(1000))
     phase: Mapped[NoticePhase] = mapped_column(enum_column(NoticePhase, "notice_phase"), default=NoticePhase.PRE_OPENING)
     source_name: Mapped[str] = mapped_column(String(60))
@@ -129,6 +132,7 @@ class BidResult(Base):
     bid_count: Mapped[int | None] = mapped_column(Integer)
     eligible_bid_count: Mapped[int | None] = mapped_column(Integer)
     winning_vendor_name: Mapped[str | None] = mapped_column(String(200))
+    winning_vendor_id: Mapped[str | None] = mapped_column(String(40))  # 사업자등록번호 등 공개 식별자
     winning_bid_amount: Mapped[Decimal | None] = mapped_column(Money)
     winning_rate: Mapped[Decimal | None] = mapped_column(Rate)
     winning_rate_basis: Mapped[RateBasis | None] = mapped_column(enum_column(RateBasis, "rate_basis"))

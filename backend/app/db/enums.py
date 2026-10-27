@@ -56,6 +56,7 @@ class LookupStatus(StrEnum):
     NOT_QUERIED = "not_queried"  # 아직 조회하지 않음
     OUT_OF_PERIOD = "out_of_period"  # 조회 기간 밖
     OUT_OF_SCOPE = "out_of_scope"  # 공급 범위 밖(해당 API 가 다루지 않는 기관·유형)
+    NOT_RETURNED = "not_returned"  # 조회했으나 응답에 없음(존재하지 않는다는 뜻은 아님)
     CONFIRMED_ABSENT = "confirmed_absent"  # 공식적으로 존재하지 않음이 확인됨
     SOURCE_ERROR = "source_error"  # API 오류로 확인 못 함
 

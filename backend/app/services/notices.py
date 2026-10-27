@@ -21,6 +21,7 @@ NOTICE_COLUMNS = (
     "region_code", "region_name", "industry_code", "industry_name", "announcement_date", "bid_deadline",
     "opening_date", "base_amount", "presumed_price", "estimated_cost", "vat_amount", "vat_included",
     "lower_limit_rate", "notice_url", "estimated_price", "estimated_price_status",
+    "reserve_range_begin_rate", "reserve_range_end_rate",
 )  # fmt: skip
 # 업로드 필드 → 결과 컬럼
 RESULT_COLUMNS = {

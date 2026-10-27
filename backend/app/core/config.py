@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     # 미검증 규칙으로 계산 자체를 막을지 여부(기본: 계산은 하되 확정 결과로 표시하지 않음)
     block_unverified_rules: bool = False
     cors_origins: list[str] = ["http://localhost:5173"]
+    # API 별 일일 호출 한도(미지정 시 개발계정 기본값). 예: BID_API_DAILY_LIMITS='{"g2b_scsbid": 10000}'
+    api_daily_limits: dict[str, int] = {}
     # 업로드 원본 파일·PDF 보관 위치
     storage_dir: str = "./storage"
 
