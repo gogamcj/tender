@@ -32,7 +32,7 @@ README.md "빠른 시작" 참고.
 
 ### 실행한 테스트와 결과
 - `pytest` (SQLite + PostgreSQL 16): **116 passed**
-  - 계산 단위 테스트 52개, 규칙 단위 테스트 22개, 스키마 통합 테스트 12개×2 DB, API 통합 테스트 8개×2 DB(일부 파라미터화 포함)
+  - 계산 단위 54개, 규칙 단위 22개, 스키마 통합 24개(12개 × SQLite·PostgreSQL), API 통합 16개(8개 × 2 DB)
 - `alembic upgrade head` → `alembic check`(모델과 차이 없음) → `alembic downgrade base` 를 SQLite·PostgreSQL 양쪽에서 성공
 - 새 가상환경에서 `pip install -e ".[dev]"` → `alembic upgrade head` → `uvicorn` 기동 → `/api/health`, `/docs`, `/api/calc/lower-limit` 응답 확인
 
