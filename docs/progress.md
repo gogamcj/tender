@@ -1,0 +1,368 @@
+# 단계별 진행 보고
+
+## 1단계 — 골격, DB 모델, 마이그레이션, 계산 엔진, 규칙 레지스트리 (2026-10-27)
+
+### 생성한 파일
+- `backend/pyproject.toml`, `backend/alembic.ini`, `backend/alembic/env.py`, `backend/alembic/script.py.mako`
+- `backend/alembic/versions/0001_initial_schema.py` — 24개 테이블 초기 스키마
+- `backend/app/core/config.py` — 환경변수 설정(`BID_` 접두사)
+- `backend/app/db/base.py` — 공통 기반, `ExactDecimal`(금액·비율 고정소수점), JSON/JSONB 겸용 타입
+- `backend/app/db/enums.py` — 데이터 상태 8종, 개찰 상태, 조회 실패 사유, 예정가격 성격 등
+- `backend/app/db/models/{accounts,rules,notices,analysis,jobs}.py`
+- `backend/app/db/session.py`
+- `backend/app/engines/calc/{money,formulas,errors}.py` — 계산 엔진
+- `backend/app/engines/rules/{schema,registry}.py` — 규칙 정의·선택·평가
+- `backend/app/services/rules.py`, `backend/app/api/{calc,rules}.py`, `backend/app/main.py`
+- `backend/tests/...` — 단위 테스트(계산·규칙), 통합 테스트(스키마·API)
+- `.env.example`, `docker-compose.yml`(PostgreSQL), `README.md`, `docs/design.md`, `docs/known-limitations.md`
+
+### 구현한 기능
+- 계산 엔진: 사정률, 가정 예정가격, 낙찰하한금액, 투찰률, 후보 투찰금액, 부가세 분리, 금액 경계 검증, 절사·올림·사사오입(처리 단위 지정)
+  - float 입력 거부, 비율 단위(% / 소수) 명시 필수, 기준금액 종류(예정가격/기초금액/추정가격) 명시 필수
+  - 기준가격이 확정값이 아니면 결과에 "가정 기반 분석" 표시
+  - 절사 규칙이 없으면 원 미만 값을 그대로 두고 경고, 부가세 포함 여부 미확인 시 계산 거부
+  - 모든 결과에 산식·입력값·경고를 담아 직렬화 → 재계산으로 재현 가능
+- 규칙 레지스트리: 유효기간(공고일 기준, 소급 금지), 대분류·발주기관 유형·계약방법·결정방식·금액 구간·지역·업종 조건, "판단 불가" 상태 구분, 다중 일치 시 자동 선택 안 함, 미검증 규칙 결과는 확정 아님(설정으로 차단 가능), 검증됨 상태는 근거 문서 필수
+- DB: 공고 유일성 `(출처, 공고번호, 차수)`, 정정 차수별 보존, 원본 레코드 분리 보존, 필드 변경 이력, 결과가 있는 공고 삭제 금지(RESTRICT), 결과 삭제 시 참여업체·예비가격 연쇄 삭제, 상태값 CHECK 제약, 낙찰률 기준 컬럼
+- SQLite ↔ PostgreSQL 같은 코드·같은 마이그레이션으로 동작. SQLite 의 NUMERIC 부동소수점 오차를 발견해 스케일 정수 저장으로 해결
+- API: `/api/health`, `/api/calc/*` 6종, `/api/rules`(등록·조회·검증상태 변경·선택/평가), OpenAPI 문서 `/docs`
+
+### 실행 방법
+README.md "빠른 시작" 참고.
+
+### 실행한 테스트와 결과
+- `pytest` (SQLite + PostgreSQL 16): **116 passed**
+  - 계산 단위 54개, 규칙 단위 22개, 스키마 통합 24개(12개 × SQLite·PostgreSQL), API 통합 16개(8개 × 2 DB)
+- `alembic upgrade head` → `alembic check`(모델과 차이 없음) → `alembic downgrade base` 를 SQLite·PostgreSQL 양쪽에서 성공
+- 새 가상환경에서 `pip install -e ".[dev]"` → `alembic upgrade head` → `uvicorn` 기동 → `/api/health`, `/docs`, `/api/calc/lower-limit` 응답 확인
+
+### 확인하지 못한 항목
+- 실제 공고문·공식 예시와의 계산 교차 검증(규칙 원문 미확보)
+- 실제 낙찰하한율·금액 구간·복수예비가격 규칙 데이터(모두 미등록)
+- Docker Compose 로 띄운 PostgreSQL 컨테이너(개발 환경에서는 로컬 PostgreSQL 16 으로 검증)
+
+### 다음 단계
+2단계: 엑셀·CSV 업로드(시트·열 분석, 열 매핑, 형식 변환, 누락·중복·오류 검사, 미리보기, 확정 저장, 결과 보고서, 원본 보존, 변경 전후 비교)
+
+## 2단계 — 엑셀·CSV 업로드 (2026-10-27)
+
+### 생성·수정한 파일
+- 생성: `backend/app/importers/{reader,parsing,fields,validate}.py`, `backend/app/services/{notices,imports}.py`, `backend/app/api/imports.py`
+- 생성: `backend/alembic/versions/0002_import_job_links.py` — 공고·결과·변경이력에 업로드 작업 연결(되돌리기용)
+- 생성: `backend/seed/sample_results.csv`, `backend/seed/README.md`, `docs/upload-guide.md`
+- 생성: `backend/tests/unit/importers/*`, `backend/tests/integration/test_imports_api.py`
+- 수정: `backend/app/db/base.py` — `UTCDateTime` 추가(SQLite 가 시간대를 버려 재업로드 시 모든 행이 '변경'으로 잡히던 문제 해결), `0001` 마이그레이션의 일시 타입을 같은 타입으로 교체
+- 수정: `backend/app/db/models/notices.py`, `backend/app/core/config.py`(`BID_STORAGE_DIR`), `backend/app/main.py`, `backend/pyproject.toml`(python-multipart, xlrd, xlwt)
+
+### 구현한 기능
+요구사항 6장의 10단계 절차를 API 로 구현했습니다(화면은 7단계).
+1. 파일 선택·검사(형식, 크기, 매크로, 압축 해제 크기, 이진 CSV) 2. 시트·열 분석 3. 열 매핑(자동 추천 + 수동) 4. 금액·비율·날짜 변환
+5. 필수 항목 확인 6. 파일 내·기존 데이터 중복 검사 7. 오류·경고 표시 8. 미리보기 9. 확정 저장(변경은 행별 승인) 10. 결과 보고서 CSV
+- 원본 파일 보관 + 행별 원본 셀 보존, 정규화 데이터 분리
+- 기존 데이터 무조건 덮어쓰기 금지: 변경 전후를 보여 주고 승인한 행만 반영, 필드별 변경 이력 기록
+- 정정 차수 저장 시 최신 차수 표시 갱신, 업로드 작업 단위 되돌리기
+- 보고서 CSV 의 수식 주입 방지
+
+### 실행 방법
+`docs/upload-guide.md` 참고. 서버 실행 후 `/docs` 에서 업로드 API 를 직접 시험할 수 있습니다.
+
+### 실행한 테스트와 결과
+- `pytest` 전체(SQLite + PostgreSQL 16): **188 passed**
+  - 이번 단계 추가: 업로드 단위 54개(인코딩 4종, 탭 구분, XLSX·XLS 읽기, 매크로 거부, 크기 제한, 날짜·금액·비율 변환, 매핑 추천, 검증 규칙), 업로드 API 통합 16개(8개 × 2 DB: 전체 흐름, 같은 파일 재업로드, 변경 승인·미승인, 되돌리기, 새 차수, CP949, 보고서, 상태 오류), 일시 저장 테스트 2개
+- `alembic upgrade head` → `alembic check` → `alembic downgrade base` SQLite·PostgreSQL 양쪽 성공
+
+### 확인하지 못한 항목
+- 실제 나라장터에서 내려받은 엑셀 파일 형식(병합 셀, 다중 헤더 등)으로는 시험하지 못했습니다. 실제 파일을 주시면 매핑 추천 사전을 보강하겠습니다.
+- 대용량(수만 행) 파일의 처리 시간
+
+### 다음 단계
+3단계: 나라장터 API 커넥터(입찰공고·낙찰정보·개방표준), 수집 작업, 호출 한도·재시도·페이지네이션, 원본 보존, 정정 이력, API 응답 구조 점검 스크립트
+
+## 3단계 — 공식 API 커넥터와 자동 수집 (2026-10-27)
+
+### 생성·수정한 파일
+- 생성: `backend/app/connectors/{client,specs,mappers}.py` — 공통 HTTP 클라이언트, 오퍼레이션 명세(근거 수준 표시), 응답 → 정규화 변환
+- 생성: `backend/app/services/{collection,quota}.py`, `backend/app/api/collections.py`, `backend/app/cli.py`(collect·probe·ops)
+- 생성: `backend/alembic/versions/0003_collection_fields.py` — 예비가격 범위, 낙찰업체 식별자, 조회 상태 `not_returned`(응답 없음)
+- 생성: `backend/tests/fakes.py`, `backend/tests/unit/connectors/test_client.py`, `backend/tests/integration/{test_collection,test_migrations}.py`, `docs/api-auth-guide.md`
+- 수정: `app/db/{enums,session}.py`, `app/db/models/notices.py`, `app/services/notices.py`, `app/core/config.py`(`BID_API_DAILY_LIMITS`), `app/main.py`
+
+### 구현한 기능
+- 커넥터: 입찰공고(목록·검색·기초금액), 낙찰정보(최종낙찰자·개찰결과·복수예비가격 상세·개찰완료 투찰업체), 개방표준 입찰공고 — 공사·용역·물품·외자 업무별 오퍼레이션 30개 등록
+- 인증키 환경변수 관리와 로그 마스킹, 요청 간격 제한, 타임아웃 30초, 지수 백오프 재시도(일시 장애·초당 한도만), 오류 코드 분류, XML 오류 응답 해석
+- 페이지네이션(totalCount 기준), 같은 페이지 반복 감지, 최대 페이지 수 제한, 조회 기간을 오퍼레이션별 최대 구간으로 자동 분할
+- 일일 호출 한도 보호(DB 카운터, 한도의 90% 에서 중단)
+- 원본 응답 항목 보존, 같은 원본 재수집 시 건너뜀, 공식 값 변경 시 필드별 이력, 사용자 자료와 충돌 시 덮어쓰지 않고 '원본과 불일치' 표시
+- 정정 차수 별도 저장 + '수정 공고 확인 필요' 표시, 개찰 전·후 구분, 결과 조회 시 응답이 비면 '응답 없음'(유찰로 보지 않음)
+- 복수예비가격 상세 → 예비가격 15개·추첨 여부 저장, 확정 예정가격·사정률 계산, 확정 예정가격 대비 낙찰률 계산(기준 기록)
+- 항목 하나의 오류가 수집 전체를 멈추지 않음, 페이지 단위 커밋으로 장애 시 받은 데이터 보존
+- 수집 이력 API(백그라운드 실행), 명령줄 수집(정기 실행용), 실제 응답 구조 점검 도구
+
+### 실행 방법
+`docs/api-auth-guide.md` 참고.
+
+### 실행한 테스트와 결과
+- `pytest` 전체(SQLite + PostgreSQL 16): **235 passed**
+  - 이번 단계 추가: 클라이언트 단위 21개(응답 형식, 오류 분류, 재시도·백오프, 키 마스킹, 페이지네이션), 수집 통합 24개(DB 무관 2개 + 11개 × 2 DB: 삽입·재수집·변경 이력, 사용자 자료 보호, 정정 차수, 낙찰·예비가격·투찰업체, 유찰 판정, 응답 없음, 한도 보호, 장애 시 데이터 보존, 부분 실패, 잘못된 항목, 백그라운드 API), 마이그레이션 왕복 2개
+- `alembic` 0001→0003 업그레이드, 0002 로 다운그레이드 후 재업그레이드(데이터 유지), 모델-스키마 차이 없음: SQLite·PostgreSQL
+
+### 확인하지 못한 항목
+- **실제 API 호출 전부**: 개발 환경에서 data.go.kr 접속이 막혀 있습니다. 인증키로 `python -m app.cli probe` 실행 결과가 필요합니다.
+- 계약과정통합공개서비스, 지자체 전용 API
+- 실제 응답 속도에 맞춘 페이지 크기·간격 조정
+
+### 다음 단계
+4단계: 과거 낙찰 데이터 분석(기간·기관·공종·지역·금액구간·결정방식·참가업체수별 통계, 사정률 분포, 이상치, 혼합 금지), 유사 입찰 검색과 선정 근거
+
+## 4단계 — 공고 검색·과거 데이터 통계·유사 입찰 (2026-10-27)
+
+### 생성·수정한 파일
+- 생성: `backend/app/engines/stats/{descriptive,similar,__init__}.py` — 서술 통계·층 분리·이상치·히스토그램·추세, 유사 입찰 점수
+- 생성: `backend/app/services/analysis.py` — 조회 조건(기간 프리셋·기준 시각·속성·금액·참가업체수), 최신 차수·제외 처리, 결과 출처 우선순위, 분석 실행 저장
+- 생성: `backend/app/api/{notices,analysis}.py`
+- 생성: `backend/seed/generate_sample_history.py`, `backend/seed/sample_history.csv`(가상 240건)
+- 생성: `backend/tests/unit/test_stats.py`, `backend/tests/integration/test_analysis_api.py`
+- 수정: `app/main.py`(라우터 등록), `seed/README.md`
+
+### 구현한 기능
+- 공고 검색 API: 검색어·기관·업종·지역·대분류·금액·기간·상태·개찰 결과 유무, 정렬·페이지, 상세(결과·정정 차수·변경 이력·원본 건수), 수동 등록, 데이터 상태 변경(이력 기록), 보류 중인 원본 변경 적용
+- 통계 API: 사정률·낙찰률·참가업체수 지표, 기간 프리셋(3개월·6개월·1년·3년)과 기준 시각, 기관·수요기관·업종·지역·금액구간·참가업체수 구간별 묶음, 월·분기 추세, IQR 이상치 표시·선택 제외, 표본 경고(10건 미만·30건 미만), 결측률, 출처별 건수
+- 조건이 다른 자료는 섞지 않음: 층별 결과만 제공, 낙찰률은 기준(예정가격·기초금액) 없는 자료 제외 후 경고
+- 사정률 분포 API: 층별 히스토그램(구간 폭 지정)
+- 유사 입찰 API: 공고 ID 또는 조건으로 검색, 필수 조건 불일치 제외·미상 감점, 항목별 점수와 선정 이유, 투찰 마감 시각 이후 개찰 건 제외(미래 정보 누출 방지)
+- 분석 실행 저장(데이터 버전·조건·결과 기록)
+
+### 실행 방법
+```
+cd backend && uvicorn app.main:app --reload
+# 가상 표본으로 확인: seed/sample_history.csv 를 /api/imports 로 업로드·미리보기·승인 후
+curl -X POST localhost:8000/api/analysis/stats -H 'Content-Type: application/json' \
+  -d '{"filters":{"period":"3y"},"metric":"sajeong_rate","group_by":["agency_name"]}'
+```
+
+### 실행한 테스트와 결과
+- `pytest` 전체(SQLite + PostgreSQL 16): **270 passed**
+  - 이번 단계 추가: 통계·유사 입찰 단위 17개, 분석·공고 API 통합 18개(9개 × 2 DB: 층 분리, 단일 층 합산과 저장, 기간 프리셋, 필터, 분포, 유사 입찰과 누출 방지, 공고 검색·상세, 수동 등록·상태 변경, 제외 공고의 통계 제외)
+
+### 확인하지 못한 항목
+- 실제 낙찰 데이터에서의 분포와 유사 입찰 품질(가상 표본으로만 확인)
+- 대용량 데이터에서의 통계 응답 시간
+
+### 다음 단계
+5단계: 투찰 시나리오(보수·중립·공격·사용자 정의), 원가·수익성, 적격심사 점검표, 분석 재현
+
+## 5단계 — 투찰 시나리오·원가/수익성·적격심사·분석 재현 (2026-10-27)
+
+### 생성·수정한 파일
+- 생성: `backend/app/engines/recommend/{scenarios,cost,qualification,__init__}.py` — 시나리오·원가·적격심사 순수 계산(법정 계산 엔진과 분리)
+- 생성: `backend/app/services/recommend.py` — 하한 산식 결정(사용자 입력 > 일치 규칙 1개 > 공고 기재 하한율), 같은 조건 과거 사정률 추출
+- 생성: `backend/app/api/{recommend,runs}.py`
+- 생성: `backend/tests/unit/test_recommend.py`, `backend/tests/integration/test_recommend_api.py`
+- 수정: `app/engines/calc/formulas.py`(A값 하한 산식), `app/engines/rules/registry.py`(산식 모듈 `a_value_lower_limit`), `app/api/analysis.py`(결과에 데이터셋 버전), `app/main.py`
+
+### 구현한 기능
+- 투찰 시나리오 API(`POST /api/recommend`): 보수·중립·공격(과거 사정률 80·50·20 백분위, 조정 가능)과 사용자 정의(가정 사정률·백분위·직접 금액)
+  - 시나리오마다 가정 사정률 → 가정 예정가격 → 가정 하한금액 → 후보금액 계산 과정, 기초금액 대비 비율, 과거 사정률 재적용 시 하한 미달·예정가격 초과 건수, 위험 표시
+  - 같은 조건(대분류·기관 유형·계약방법·결정방식·하한율)의 과거 자료만 쓰고, 대상 공고 입찰마감 이후 개찰 건은 제외
+  - 표본 10건 미만이면 백분위 시나리오 거부, 하한율 미확인이면 계산 거부, 미검증 규칙 차단 설정 시 409
+  - 모든 결과에 '가정 기반 분석' 표시와 낙찰 보장·확률 아님 안내, 확률 값은 내지 않음
+- 원가·수익성: 원가 9개 항목 등록·수정, 빈 항목은 0 으로 보지 않고 총원가 미확정 처리, 부가세 포함 여부 미확인 시 이익 계산 거부, 이익·이익률, 원가 미달·목표 미달 표시, 손익분기·목표 이익 최소 투찰금액
+- 적격심사 점검표: 항목별 배점·점수·상태(확인·예상·미확인)·근거, 미확인 항목은 점수 입력 거부, 총점은 범위로만(확인+예상 / 확인만), 통과 기준 대비 통과·미달·판단 불가
+- 분석 실행 기록: 목록·상세(입력·가정·규칙 버전·데이터셋 버전·시나리오), 저장된 입력으로 재계산해 데이터 변경 여부와 결과 일치 여부 비교(통계·유사 입찰·시나리오)
+
+### 실행 방법
+```
+cd backend && uvicorn app.main:app --reload
+# 공고 등록 → (규칙 등록 또는 하한율 입력) → 시나리오
+curl -X POST localhost:8000/api/recommend -H 'Content-Type: application/json' \
+  -d '{"notice_id":1,"lower_limit_rate_pct":"87.745","cost_id":1,"save":true}'
+```
+
+### 실행한 테스트와 결과
+- `pytest` 전체(SQLite + PostgreSQL 16): **301 passed**
+  - 이번 단계 추가: 시나리오·원가·적격심사 단위 15개, API 통합 16개(8개 × 2 DB: 하한율 없을 때 거부, 규칙·원가 포함 시나리오 저장과 재현, 데이터 변경 감지, 사용자 하한율과 표본 부족, 미검증 규칙 차단, A값 규칙, 원가 등록·평가, 적격심사 점검표, 통계 재현)
+
+### 확인하지 못한 항목
+- 실제 공고·낙찰 자료에서의 시나리오 타당성(가상 표본으로만 확인)
+- 실제 하한율·A값·단수처리 규정과의 대조(등록된 검증 규칙 없음)
+
+### 다음 단계
+6단계: PDF 공고문 분석(텍스트 추출, 항목별 페이지·신뢰도, 사용자 검토 후 반영)
+
+## 6단계 — PDF 공고문 분석 (2026-10-27)
+
+### 생성·수정한 파일
+- 생성: `backend/app/pdf/{extract,fields,__init__}.py` — 텍스트·표 추출, 항목 후보 찾기(쪽·원문·위치·신뢰도)
+- 생성: `backend/app/services/pdfs.py`, `backend/app/api/pdfs.py`
+- 생성: `backend/tests/pdf_samples.py`(가상 공고문 PDF 생성), `backend/tests/unit/test_pdf_fields.py`, `backend/tests/integration/test_pdf_api.py`
+- 생성: `backend/seed/generate_sample_notice_pdf.py`, `backend/seed/sample_notice.pdf`
+- 수정: `pyproject.toml`(pdfplumber, 개발용 reportlab), `app/db/base.py`(금액·일시 컬럼의 Python 형식 표시), `app/main.py`
+
+### 구현한 기능
+- PDF 업로드(같은 파일 중복 거부, 원본 보관), 형식·암호화·용량·쪽수 검사, 텍스트 레이어 유무 판정
+- 16개 항목 후보 추출: 공고번호, 공고명, 공고·수요기관, 기초금액, 추정가격, 낙찰하한율, A값, 입찰마감·개찰일시, 계약방법, 낙찰자 결정방법, 예비가격 범위, 부가세 포함 여부, 지역제한, 참가자격
+  - 후보마다 쪽 번호, 원문 줄, 위치(좌표), 표 위치, 추출 방식, 신뢰도
+  - 같은 항목에서 값이 다르면 '불일치'로 표시하고 고르지 않음
+  - 문장 속 언급(예: '기초금액의 ±2%')은 후보로 잡지 않음, 원 단위가 아닌 금액은 변환하지 않음
+- 검토: 확인·수정·기각, 수정 값 형식 검사, 찾지 못한 항목 직접 입력, 쪽 원문 보기, 연결된 공고 값과 나란히 비교
+- 반영: 확인·수정된 값만, 공고가 비어 있으면 반영(이력 기록), 다른 값이 있으면 보류 변경으로 남김(명시적 덮어쓰기 지정 시에만 반영), 확인된 값끼리 다르면 반영 거부, 참고용 항목(A값·지역제한 등)은 반영하지 않음
+- 고친 결함: 보류 변경을 반영할 때 일시 항목(입찰마감 등)이 문자열로 들어가 저장에 실패하던 문제
+
+### 실행 방법
+```
+cd backend && pip install -e ".[dev]" && uvicorn app.main:app --reload
+curl -F file=@seed/sample_notice.pdf -F notice_id=1 localhost:8000/api/pdfs
+```
+
+### 실행한 테스트와 결과
+- `pytest` 전체(SQLite + PostgreSQL 16): **318 passed**
+  - 이번 단계 추가: PDF 추출 단위 7개, PDF API 통합 10개(5개 × 2 DB)
+
+### 확인하지 못한 항목
+- 실제 공고문 PDF(나라장터·지자체 양식)에서의 추출률. 실제 파일을 받으면 표제어 사전을 보완해야 합니다.
+- 스캔 PDF OCR
+
+### 다음 단계
+7단계: React + TypeScript 웹 화면(17개 메뉴), 차트, Vitest·Playwright
+
+## 7단계 — 로그인·권한, 원가 접근 제한, 관심 공고, 대시보드, 복수예비가격, 보고서 (2026-10-27)
+
+계획 변경: 화면(React)이 로그인·대시보드·보고서 API 에 의존하므로 원래 8단계에 있던 인증·보고서를 먼저 만들었습니다. 화면은 8단계, Docker·백업·설치 검증은 9단계입니다.
+
+### 생성·수정한 파일
+- 생성: `app/core/security.py`(Argon2id·토큰), `app/services/auth.py`, `app/api/{auth,deps,workspace,reserve,reports}.py`, `app/reports/writer.py`, `alembic/versions/0004_auth_sessions.py`
+- 생성: `tests/integration/{test_auth,test_workspace_reports}.py`
+- 수정: `app/main.py`(모든 /api 경로 로그인 필요), `app/api/{rules,collections}.py`(관리자 전용), `app/api/recommend.py`(원가 소유자 검사), `app/api/notices.py`(검색 조건 공용화), `app/api/runs.py`, `app/api/calc.py`, `app/engines/calc/formulas.py`(예비가격 평균), `app/db/models/accounts.py`, `app/db/enums.py`(조회 전용 역할), `app/cli.py`(create-user), `app/core/config.py`, `.env.example`, `tests/conftest.py`(역할별 로그인 클라이언트)
+
+### 구현한 기능
+- 로그인·로그아웃·내 정보·비밀번호 변경, Argon2id 해시, 세션 토큰은 해시만 저장, 연속 실패 잠금, 비밀번호 규칙, 비밀번호 변경·계정 비활성화 시 세션 종료
+- 역할: 관리자(사용자 관리·규칙 등록/검증·수집 실행·모든 원가), 일반, 조회 전용(변경 불가·원가 열람 불가). 첫 관리자는 명령줄로 생성(비밀번호는 프롬프트·환경변수로만)
+- 원가 자료: 작성자·관리자만 조회·수정·평가·보고서, 남의 원가는 존재 여부도 알리지 않음(404)
+- 대시보드 API(마감 임박 공고, 검토 필요 건수, 보류 변경, 미검증 규칙, PDF 미검토, 최근 수집·업로드, 오늘 API 사용량)
+- 관심 공고(메모), 저장한 검색 조건(사용자별)
+- 복수예비가격: 예정가격 = 추첨 예비가격 평균 계산, 공고별 예비가격·기초금액 대비 비율·추첨 여부·평균과 예정가격 대조, 여러 공고의 비율 분포·번호별 추첨 횟수(조건·예비가격 범위별)
+- 보고서 XLSX·CSV: 공고 목록(검색 조건 그대로), 저장된 분석(개찰 결과 분석·유사 입찰·투찰 시나리오), 원가·수익성(투찰금액별 손익), 계산 규칙 요약. 모든 보고서에 생성일시·기준일/기간·데이터 버전·산식·적용 규칙·추정값 여부. 수식 주입 방지
+
+### 실행 방법
+```
+cd backend && alembic upgrade head && python -m app.cli create-user admin --role admin
+uvicorn app.main:app --reload
+curl -c ck -X POST localhost:8000/api/auth/login -H 'Content-Type: application/json' -d '{"username":"admin","password":"..."}'
+curl -b ck -o notices.xlsx 'localhost:8000/api/reports/notices.xlsx?agency=샘플시청'
+```
+
+### 실행한 테스트와 결과
+- `pytest` 전체(SQLite + PostgreSQL 16): **358 passed**
+  - 이번 단계 추가: 인증·권한 21개(10개 × 2 DB + 명령줄 1), 대시보드·관심 공고·저장 조건·예비가격·보고서 18개(9개 × 2 DB). 기존 테스트는 모두 로그인한 관리자 클라이언트로 다시 통과
+- 마이그레이션 0001→0004 왕복, 모델-스키마 차이 없음
+
+### 확인하지 못한 항목
+- 실제 수집한 복수예비가격 자료로 분석 확인
+- HTTPS 환경에서 보안 쿠키 동작(9단계 Docker 구성에서 안내)
+
+### 다음 단계
+8단계: React + TypeScript 화면 17개 메뉴, 차트, Vitest·Playwright
+
+## 8단계 — React 웹 화면 17개 메뉴, 차트, 화면 테스트 (2026-10-27)
+
+### 생성·수정한 파일
+- 생성: `frontend/` 전체(Vite 5 + React 18 + TypeScript + Tailwind 3 + Recharts 2 + Vitest 2)
+  - `src/api/client.ts`(API 호출·오류 문구), `src/lib/{format,auth,useAsync,useNoticeParam}`, `src/components/{Layout,ui,charts,NoticePicker,CalcResultView,AnalysisFilters}.tsx`
+  - `src/pages/` 17개 메뉴 + 로그인: Dashboard, NoticeSearch, NoticeAnalysis, PdfAnalysis, Calculator, ReserveAnalysis, HistoryAnalysis, SimilarSearch, Scenarios, Qualification, Costs, Favorites, Collections, Imports, Rules, Reports, Settings, Login
+  - `src/test/{format.test.ts,components.test.tsx}`, `e2e/{smoke,flows}.cjs`(Playwright)
+- 생성: `scripts/load_sample_data.py`(실행 중인 서버에 가상 샘플 240건·예시 규칙 등록)
+
+### 구현한 기능
+- 17개 메뉴 전부 실제 API 에 연결(화면만 있고 동작하지 않는 메뉴 없음). 로그인하지 않으면 로그인 화면, 권한별로 버튼 숨김(조회 전용은 변경·원가 화면 불가, 관리자만 규칙 등록·검증·수집 실행·사용자 관리)
+- 모바일(폭 390px): 메뉴 접기, 핵심 숫자·경고 먼저, 복잡한 표는 가로 스크롤, 공고 목록은 카드형. 페이지 가로 넘침 없음(17개 화면 자동 점검)
+- 차트 8종: 기간별 낙찰률, 사정률 분포, 발주기관별 비교, 공종별 비교, 금액 구간별 분포, 참여 업체 수 분포, 후보 투찰금액별 결과 비교(과거 사정률 적용 시 하한 미달·예정가격 초과 건수), 원가와 예상 이익 비교
+  - 모든 차트에 분석 기간·표본 수·기준 금액·데이터 출처 표시, 표본 30건 미만 경고(10건 미만 '매우 적음'), '표로 보기' 제공
+  - 색은 검증한 범주 팔레트 앞 3색만 사용, 계열 2개 이상이면 범례
+- 공고 검색: 검색 조건 저장·불러오기, 관심 공고 ☆, 검색 조건 그대로 XLSX·CSV
+- 엑셀 업로드: 파일 → 시트·열 연결(정확히 같은 이름만 자동) → 변환 옵션 → 미리보기(새 공고·변경·중복·오류 수, 행별 오류·변경 내용) → '기존과 다름' 행은 체크해야만 반영 → 저장 결과·보고서 CSV → 되돌리기
+- PDF: 같은 파일을 다시 올리면 새로 만들지 않고 기존 분석 결과를 엶
+- 금액은 화면에서도 문자열로 다루고 표시 때만 천 단위 쉼표(부동소수점 변환 없음). 입력 칸마다 형식 오류 표시
+- API 장애: 연결 실패·서버 오류(5xx)·입력 오류(422)를 구분한 안내와 '다시 시도'
+
+### 실행 방법
+```
+# 백엔드(다른 터미널)
+cd backend && uvicorn app.main:app
+# 프런트엔드 개발 서버: http://localhost:5173 (/api 는 8000 번으로 전달)
+cd frontend && npm ci && npm run dev
+# 빌드·미리보기: http://localhost:4173
+npm run build && npm run preview
+# 샘플 데이터(가상)
+BID_USERNAME=admin python scripts/load_sample_data.py
+```
+
+### 실행한 테스트와 결과
+- `npx tsc --noEmit`: 오류 없음, `npm run build`: 성공(차트·라이브러리 분할, 가장 큰 파일 gzip 104KB)
+- `npm test`(Vitest): **13 passed** — 금액·비율 입력 검사, 오류 문구, 차트 메타·소표본 경고·표 보기, 오류 상자, 로그인 실패, 조회 전용 원가 차단, 계산기 입력 오류, API 500 안내
+- `npm run e2e`(Playwright, 실제 백엔드 + vite preview + 샘플 240건, PC 1366px·모바일 390px):
+  - 17개 화면 열기: 콘솔 오류·API 4xx/5xx·가로 넘침 **0건**(PC·모바일)
+  - 기능 흐름 **20개 통과**: 로그인 실패, 계산기 입력 오류, 검색 필터, 과거 결과 차트→표 전환, 시나리오 계산·저장, 저장 분석 XLSX 다운로드, 엑셀 업로드 미리보기(오류 행 표시), PDF 업로드·중복 파일, API 연결 실패·500 안내(PC·모바일 각각), 조회 전용 원가 차단·규칙 상태 변경 불가
+- 백엔드 변경 없음(`scripts/load_sample_data.py` 추가만)
+
+### 확인하지 못한 항목
+- 실제 휴대폰 브라우저(iOS Safari·Android Chrome) 실기 확인. 자동 점검은 Chromium 의 모바일 폭으로만 했습니다
+- 화면 낭독기 등 보조기기 실사용 점검(레이블·role 은 넣었으나 별도 접근성 감사는 안 함)
+- 다크 모드는 지원하지 않습니다
+
+### 다음 단계
+9단계: Docker Compose(백엔드·프런트엔드·DB), 백업·복원 스크립트, 설치·API 키·엑셀 업로드·백업 매뉴얼, 깨끗한 환경에서 설치 검증, 최종 구현·미구현 정리
+
+## 9단계 — Docker Compose 전체 실행, 백업·복원, 매뉴얼, 깨끗한 환경 설치 검증 (2026-10-27)
+
+### 생성·수정한 파일
+- 생성: `backend/Dockerfile`, `backend/.dockerignore`, `frontend/Dockerfile`, `frontend/nginx.conf`, `frontend/.dockerignore`
+- 생성: `scripts/backup.sh`, `scripts/restore.sh`, `docs/install.md`, `docs/backup-restore.md`
+- 수정: `docker-compose.yml`(db + backend + frontend), `backend/pyproject.toml`(누락 의존성 추가), `.env.example`, `README.md`, `docs/{upload-guide,api-auth-guide,known-limitations}.md`
+
+### 구현한 기능
+- `docker compose up -d --build` 한 번으로 PostgreSQL 16 + 백엔드(시작 시 마이그레이션 자동 적용, 비루트 사용자, 헬스체크) + 웹(nginx, `/api` 같은 출처 전달, SPA 경로, 업로드 25MB, 보안 헤더)
+- 포트는 기본적으로 이 컴퓨터(127.0.0.1)에만 열림. DB 비밀번호·API 키는 `.env` 로만 전달
+- 백업: DB(pg_dump) + 업로드 원본 + 체크섬·마이그레이션 버전·공고 수 기록, 덤프 읽기 검사, `.env` 는 제외
+- 복원: 체크섬 확인 → 'RESTORE' 입력 확인 → **현재 상태 자동 안전 백업** → 쓰기 중지 → DB·원본 교체 → 재시작. 실패 시 되돌릴 경로 안내
+
+### 깨끗한 환경 설치 검증 (실제로 한 것)
+1. git 에 올라갈 파일만 새 폴더로 복사(로컬 venv·node_modules·DB·.env 없음), `.env.example` → `.env`, 무작위 DB 비밀번호
+2. 이미지 빌드 → `docker compose up` → **백엔드가 시작하지 못함**: `argon2-cffi`·`httpx` 가 `pyproject.toml` 필수 의존성에 빠져 있었음(개발 환경에는 따로 설치되어 있어 테스트로는 드러나지 않던 결함). 추가 후 재빌드
+3. db·backend healthy, 웹 200. 관리자·조회 전용 계정 생성(명령줄), 샘플 240건 등록
+4. 이 Docker 구성(PostgreSQL)에 대해 Playwright 점검: 17개 화면 PC·모바일 오류 0건, 기능 흐름 **20개 통과**
+5. 백업 → 업로드 1건 추가 → 복원: 업로드 작업 수가 백업 시점으로 돌아옴, PDF 원본 파일·로그인·화면 정상. 첫 복원 시도에서 `/data/storage` 가 마운트 지점이라 지우지 못하는 결함을 발견해 고침(안의 파일만 지우도록)
+
+### 실행한 테스트와 결과
+- 백엔드 `pytest`(SQLite + PostgreSQL 16): **358 passed**(의존성 수정 후 재실행)
+- 프런트엔드 `npm test` 13 passed, `npm run build` 성공, `npm run e2e` 20 passed(Vite 미리보기 + SQLite, Docker + PostgreSQL 두 구성 모두)
+
+### 확인하지 못한 항목
+- Windows·macOS 의 Docker Desktop 에서 실행(검증은 Linux Docker Engine 29 에서만)
+- 이 개발 환경은 Docker Hub 요청 한도에 걸려 같은 이미지를 미러(mirror.gcr.io)에서 받아 확인했습니다. 일반 환경에서는 `docker compose up --build` 가 Docker Hub 에서 바로 받습니다
+- HTTPS 리버스 프록시 구성(문서로만 안내)
+
+## 최종 정리 — 구현·검증 범위
+
+### 구현하고 검증한 것
+| 영역 | 내용 | 검증 |
+|---|---|---|
+| 수집 | 조달청 3개 서비스 연결, 일일 한도 보호, 원본 보관, 변경 이력 | 단위·통합 테스트(가짜 응답). **실제 API 호출은 미검증** |
+| 업로드 | XLSX·XLS·CSV, 열 연결, 미리보기, 변경 확인 후 반영, 되돌리기, 보고서 | 테스트 + 화면 E2E |
+| 계산 | 투찰률·하한금액·A값·예정가격(예비가격 평균)·부가세, Decimal, 단수처리 명시 | 단위 테스트 |
+| 규칙 | 유효기간·소급 금지·검증 상태, 미검증 규칙은 확정 결과 아님 | 테스트 + 화면 |
+| 분석 | 과거 결과 통계(조건별 층 분리), 유사 입찰, 복수예비가격, 분석 재현 | 테스트 + 화면 |
+| 추천 | 보수·중립·공격·사용자 시나리오, 과거 사정률 적용 결과 건수(확률 아님) | 테스트 + 화면 |
+| 원가·적격심사 | 미입력 항목을 0 으로 보지 않음, 미확인 항목은 점수 범위로 | 테스트 + 화면 |
+| PDF | 텍스트 PDF 항목 추출·검토·반영(덮어쓰기는 명시적으로만) | 생성한 샘플 PDF 로만 |
+| 인증 | Argon2id, 세션, 잠금, 3개 역할, 원가 열람 제한 | 테스트 + 화면 |
+| 보고서 | XLSX·CSV 5종, 수식 주입 방지 | 테스트 + 다운로드 E2E |
+| 화면 | 17개 메뉴, 차트 8종, 모바일 | Vitest + Playwright |
+| 운영 | Docker Compose, 백업·복원 | 깨끗한 폴더 설치·복원 실제 수행 |
+
+### 구현하지 않았거나 검증하지 못한 것
+- 실제 공공데이터 API 응답(이 개발 환경에서 data.go.kr 접속 차단). 사용자 PC 에서 `probe` 결과를 받아 응답 필드명을 맞춰야 합니다
+- 실제 공고문 PDF 추출률, 스캔 PDF OCR(미구현)
+- 낙찰하한율 등 실제 규정 값: 규칙은 모두 사용자가 원문을 보고 등록·검증해야 합니다(예시 규칙은 가상)
+- 낙찰 확률: 검증된 모델이 없으므로 제공하지 않음(의도)
+- 실제 입찰 제출 자동화: 하지 않음(요구사항)
+- 정기 자동 수집, 알림(메일·푸시), PDF 보고서, 다크 모드
