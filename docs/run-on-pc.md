@@ -10,7 +10,9 @@
 ## 1단계. Docker Desktop 설치 (처음 한 번)
 
 1. https://www.docker.com/products/docker-desktop/ 에서 내 PC 에 맞는 버전을 내려받아 설치합니다.
-   - Windows: 설치 중 "Use WSL 2" 항목은 체크된 그대로 둡니다. 설치 후 **재부팅**하라고 하면 재부팅합니다.
+   - Windows 설치 옵션: **All-users installation** 선택, 아래는 **WSL 2**, **Allow Windows Containers 는 체크 해제**. 관리자 권한을 물으면 '예'. 설치 후 **재부팅**합니다.
+     (Per-user 를 고르면 처음 설치하는 PC 에서는 "Virtual Machine Platform" 기능이 없다며 실패합니다. 그때는 All-users 로 다시 설치하거나, 관리자 PowerShell 에서 `wsl --install` → 재부팅 후 다시 설치)
+   - Docker 실행 시 "가상화(Virtualization)가 꺼져 있다"고 나오면 PC 의 BIOS 설정에서 가상화(Intel VT-x / AMD SVM)를 켜야 합니다.
    - "WSL 업데이트가 필요하다"는 창이 나오면 안내대로 업데이트합니다.
 2. Docker Desktop 을 실행합니다. 처음에 나오는 로그인·설문은 건너뛰어도 됩니다.
 3. 화면 왼쪽 아래가 **초록색 "Engine running"** 이 되면 준비 완료입니다(1~2분).
