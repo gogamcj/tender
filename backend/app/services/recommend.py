@@ -72,19 +72,32 @@ def resolve_lower_limit(
     raise CalcInputError("lower_limit_rate", "낙찰하한율을 확인할 수 없습니다. 적용 규칙을 등록하거나 공고문의 하한율을 입력하세요.")
 
 
-def history_for(session: Session, n: ProcurementNotice, *, period: str | None, extra: dict[str, Any]) -> tuple[list[Record], list[Decimal], Filters]:
-    """같은 조건(대분류·기관 유형·계약방법·결정방식·공고 하한율)의 과거 사정률. 대상 공고의 입찰마감 이전 개찰 건만 쓴다."""
-    missing = [k for k in ("procurement_type", "issuing_authority_type", "contract_method", "award_method") if getattr(n, k) is None]
-    if missing:
-        raise CalcInputError("notice", f"공고 조건이 확인되지 않아 같은 조건의 과거 자료를 고를 수 없습니다: {missing}")
+CONDITION_LABELS = {"procurement_type": "업무 구분", "issuing_authority_type": "발주기관 유형", "contract_method": "계약방법", "award_method": "낙찰자 결정방식", "lower_limit_rate": "공고 하한율"}
+
+
+def history_for(
+    session: Session, n: ProcurementNotice, *, period: str | None, extra: dict[str, Any],
+) -> tuple[list[Record], list[Decimal], Filters, list[str]]:
+    """같은 조건(대분류·기관 유형·계약방법·결정방식·공고 하한율)의 과거 사정률. 대상 공고의 입찰마감 이전 개찰 건만 쓴다.
+
+    업무 구분은 반드시 있어야 한다. 나머지 조건이 공고에 비어 있으면 값을 추정하지 않고 그 조건을 빼고 비교하며,
+    뺀 조건 이름을 함께 돌려준다(호출하는 쪽에서 경고로 표시).
+    """
+    if n.procurement_type is None:
+        raise CalcInputError("notice", "공고의 업무 구분(공사·용역·물품)이 확인되지 않아 같은 조건의 과거 자료를 고를 수 없습니다.")
+    ignored = [k for k in ("issuing_authority_type", "contract_method", "award_method", "lower_limit_rate") if getattr(n, k) is None]
     f = Filters(period=period, as_of=n.bid_deadline or n.opening_date or datetime.now(UTC),
                 procurement_type=n.procurement_type, issuing_authority_type=n.issuing_authority_type,
                 contract_method=n.contract_method, award_method=n.award_method, **extra)
     f.resolved_period()
     records = [r for r in load_records(session, f) if r.notice_id != n.id]
-    target_key = stratum_of(_as_record(n), "sajeong_rate")
-    same = [r for r in records if stratum_of(r, "sajeong_rate") == target_key]
-    return same, [r.sajeong_rate for r in same if r.sajeong_rate is not None], f
+
+    def key(r: Record) -> tuple:
+        return tuple(kv for kv in stratum_of(r, "sajeong_rate") if kv[0] not in ignored)
+
+    target_key = key(_as_record(n))
+    same = [r for r in records if key(r) == target_key]
+    return same, [r.sajeong_rate for r in same if r.sajeong_rate is not None], f, [CONDITION_LABELS[k] for k in ignored]
 
 
 def _as_record(n: ProcurementNotice) -> Record:

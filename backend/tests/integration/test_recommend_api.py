@@ -184,3 +184,24 @@ def test_user_base_amount_differs_from_notice(target):
     same = client.post("/api/recommend", json={"notice_id": nid, "period": None, "lower_limit_rate_pct": "87.745"}).json()
     assert same["base_amount_source"] == "notice"
     assert not any("USER_BASE_AMOUNT" in w for w in same["warnings"])
+
+
+def test_missing_conditions_are_dropped_with_warning(target):
+    client, _ = target
+    partial = TARGET | {"notice_number": "T-2026-NOAUTH", "issuing_authority_type": None}
+    nid = client.post("/api/notices", json=partial).json()["id"]
+    r = client.post("/api/recommend", json={"notice_id": nid, "period": None, "lower_limit_rate_pct": "87.745"})
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert "발주기관 유형" in out["sample"]["ignored_conditions"]
+    assert any(w.startswith("CONDITION_IGNORED") for w in out["warnings"])
+    assert out["sample"]["n"] > 0
+    full = client.post("/api/recommend", json={"notice_id": target[1], "period": None, "lower_limit_rate_pct": "87.745"}).json()
+    assert out["sample"]["n"] >= full["sample"]["n"]
+
+
+def test_refuses_without_procurement_type(target):
+    client, _ = target
+    nid = client.post("/api/notices", json=TARGET | {"notice_number": "T-2026-NOTYPE", "procurement_type": None}).json()["id"]
+    r = client.post("/api/recommend", json={"notice_id": nid, "lower_limit_rate_pct": "87.745"})
+    assert r.status_code == 400 and "업무 구분" in r.json()["detail"], r.text

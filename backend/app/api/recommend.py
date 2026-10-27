@@ -118,7 +118,7 @@ def run_recommend(body: RecommendIn, session: Session, user: User) -> tuple[dict
             extra[k] = Decimal(str(extra[k]))
     spec, rule_info = resolve_lower_limit(session, n, LowerLimitOverride(body.lower_limit_rate_pct, body.a_value), base_amount=base)
     try:
-        records, samples, f = history_for(session, n, period=body.period, extra=extra)
+        records, samples, f, ignored = history_for(session, n, period=body.period, extra=extra)
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
     sheet = None
@@ -135,6 +135,9 @@ def run_recommend(body: RecommendIn, session: Session, user: User) -> tuple[dict
     result = build_scenarios(req)
     result["notice"] = {"id": n.id, "notice_number": n.notice_number, "title": n.title, "bid_deadline": n.bid_deadline.isoformat() if n.bid_deadline else None}
     result["rule_selection"] = rule_info
+    if ignored:
+        result["warnings"].append(f"CONDITION_IGNORED: 공고에 {', '.join(ignored)} 정보가 없어 이 조건은 빼고 과거 자료와 비교했습니다. 비교 범위가 넓어졌으니 결과를 참고용으로만 보세요.")
+    result["sample"]["ignored_conditions"] = ignored
     result["base_amount_source"] = "notice" if body.base_amount is None else "user_input"
     if body.base_amount is not None:
         if n.base_amount is None:
